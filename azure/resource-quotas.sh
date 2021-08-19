@@ -4,7 +4,7 @@ set -e
 function show_help()
 {
     echo "Usage:"
-    echo "   plan.sh --location <location> --pgtype <pg-type> [--ha] [--with-infra]"
+    echo "   resource-quotas.sh --location <location> --pgtype <pg-type> [--ha] [--with-infra]"
 }
 
 location=""

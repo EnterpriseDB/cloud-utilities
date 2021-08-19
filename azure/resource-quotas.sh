@@ -4,8 +4,40 @@ set -e
 function show_help()
 {
     echo "Usage:"
-    echo "   plan.sh --location <location> --pgtype <pg-type> [--ha] [--with-infra]"
+    echo "   $0 --location <location> --pgtype <pg-type> [--ha] [--with-infra]"
+    echo ""
+    echo "     The available locations: ${AVAILABLE_LOCATIONS[@]}"
+    echo "     The available PG types: ${AVAILABLE_PGTYPE[@]}"
+    echo ""
 }
+
+AVAILABLE_LOCATIONS=(
+    australiaeast
+    brazilsouth
+    canadacentral
+    centralus
+    eastus
+    eastus2
+    francecentral
+    japaneast
+    northeurope
+    southcentralus
+    uksouth
+    westeurope
+    westus
+    westus2
+)
+
+AVAILABLE_PGTYPE=(
+  e2s_v3
+  e4s_v3
+  e8s_v3
+  e16s_v3
+  e20s_v3
+  e32s_v3
+  e48s_v3
+  e64s_v3
+)
 
 location=""
 
@@ -19,7 +51,7 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
-    --pgtype)
+    -t|--pgtype)
       pg_type="$2"
       shift # past argument
       shift # past value
@@ -43,6 +75,8 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 [ -z "$location" ] && show_help && echo "error: missed -l to specify Azure location" && exit 1
 [ -z "$pg_type" ] && show_help && echo "error: missed -t to specify PG instance type" && exit 1
+[[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${location}" ]] && show_help && echo "error: invalid location" && exit 1
+[[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] && show_help && echo "error: invalid PG instance type" && exit 1
 
 function infra_dsv2_vcpus()
 {

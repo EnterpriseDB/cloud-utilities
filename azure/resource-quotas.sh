@@ -4,12 +4,18 @@ set -e
 function show_help()
 {
     echo "Usage:"
-    echo "   $0 --location <location> --pgtype <pg-type> [--ha] [--with-infra]"
+    echo "   $0 --location <location> --pgtype <pg-type> --endpoint <endpoint> [--ha] [--with-infra]"
     echo ""
     echo "     The available locations: ${AVAILABLE_LOCATIONS[@]}"
     echo "     The available PG types: ${AVAILABLE_PGTYPE[@]}"
+    echo "     The available endpoints: ${ENDPOINTS[@]}"
     echo ""
 }
+
+AVAILABLE_ENDPOINTS=(
+  public
+  private
+)
 
 AVAILABLE_LOCATIONS=(
     australiaeast
@@ -56,6 +62,11 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
+    -e|--endpoint)
+      endpoint="$2"
+      shift # post argument
+      shift # post value
+      ;;
     --ha)
       ha=true
       shift # past argument
@@ -75,8 +86,10 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 [ -z "$location" ] && show_help && echo "error: missed -l to specify Azure location" && exit 1
 [ -z "$pg_type" ] && show_help && echo "error: missed -t to specify PG instance type" && exit 1
+[ -z "$endpoint" ] && show_help && echo "error: missed -e to specify endpoint" && exit 1
 [[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${location}" ]] && show_help && echo "error: invalid location" && exit 1
 [[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] && show_help && echo "error: invalid PG instance type" && exit 1
+[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] && show_help && echo "error: invalid endpoint" && exit 1
 
 function infra_dsv2_vcpus()
 {
@@ -86,6 +99,11 @@ function infra_dsv2_vcpus()
 function infra_esv3_vcpus()
 {
     [ -z "$with_infra" ] && echo 0 || echo 6
+}
+
+function need_public_ip()
+{
+    [ "$endpoint" = "public" ] && echo 1 || echo 0
 }
 
 function need_pg_vcpus_for()
@@ -174,8 +192,8 @@ free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 # calculate required resources
 need_dsv2_vcpus=$(infra_dsv2_vcpus)
 need_esv3_vcpus=$(($(need_pg_vcpus_for $pg_type $ha)+$(infra_esv3_vcpus)))
-need_publicip_basic=1
-need_publicip_standard=1
+need_publicip_basic=$(need_public_ip)
+need_publicip_standard=$(need_public_ip)
 
 # calculate gap of "need - free"
 gap_regional_vcpus=$((free_regional_vcpus - need_esv3_vcpus - need_dsv2_vcpus))

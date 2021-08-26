@@ -8,7 +8,7 @@ function show_help()
     echo ""
     echo "     The available locations: ${AVAILABLE_LOCATIONS[@]}"
     echo "     The available PG types: ${AVAILABLE_PGTYPE[@]}"
-    echo "     The available endpoints: ${ENDPOINTS[@]}"
+    echo "     The available endpoints: ${AVAILABLE_ENDPOINTS[@]}"
     echo ""
 }
 

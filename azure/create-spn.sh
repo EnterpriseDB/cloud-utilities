@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# set -x
 set -e
 
-script_name=create-spn.sh
 display_name=""
 subscription=""
 
@@ -20,7 +18,7 @@ show_help()
   echo ""
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
-  echo "  -s, --subscription: The Azure Subscription ID used to create resources."
+  echo "  -s, --subscription: The Azure Subscription ID used by EDB Cloud."
   echo "  -h, --help:         Show this help."
   echo ""
 }
@@ -62,14 +60,12 @@ while [[ $# -gt 0 ]]; do
     -d|--display-name)
       display_name="$2"
       check_display_name
-      shift
-      shift
+      shift 2
       ;;
     -s|--subscription)
       subscription="$2"
       check_subscription
-      shift
-      shift
+      shift 2
       ;;
     *)
       shift
@@ -107,5 +103,3 @@ check
 set_subscription
 create_ad_sp
 print_result
-
-# set +x

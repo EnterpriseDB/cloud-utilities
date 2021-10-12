@@ -79,6 +79,11 @@ set_subscription()
   az account set --subscription ${subscription}
 }
 
+show_account()
+{
+  az account show
+}
+
 create_ad_sp()
 {
   echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
@@ -101,5 +106,6 @@ print_result()
 
 check
 set_subscription
+show_account
 create_ad_sp
 print_result

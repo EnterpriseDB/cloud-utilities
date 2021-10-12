@@ -28,6 +28,11 @@ the [EDB Cloud API][2].
 
 For more details about EDB Cloud API, please refer to [Using the EDB Cloud API][5]
 
+### Create a Azure AD SPN for EDB Cloud Signup
+
+[create-spn.sh](./azure/create-spn.sh) is a script used to create a SPN with enough
+permissions. The output can be used in EDB Cloud Signup page.
+
 
 [1]: https://www.enterprisedb.com/docs/edbcloud/latest/
 [2]: https://portal.edbcloud.com/api/docs/

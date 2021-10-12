@@ -14,7 +14,7 @@ show_help()
   echo "Required tools:"
   echo "  jq"
   echo "Usage:"
-  echo "  $0 --display-name NAME [options]"
+  echo "  $0 -d NAME -s SUBSCRIPTION_ID [options]"
   echo ""
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."

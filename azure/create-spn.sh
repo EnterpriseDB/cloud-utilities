@@ -4,6 +4,7 @@ set -e
 
 display_name=""
 subscription=""
+years=""
 
 spn=""
 
@@ -19,6 +20,7 @@ show_help()
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
   echo "  -s, --subscription: The Azure Subscription ID used by EDB Cloud."
+  echo "  -y, --years:        The Number of years for which the credentials will be valid. Default: 1 year."
   echo "  -h, --help:         Show this help."
   echo ""
 }
@@ -49,6 +51,15 @@ check_subscription()
   fi
 }
 
+check_years()
+{
+  if [[ "${years}" == "" ]]; then
+    show_help
+    echo "Error: -y, --years should have a value"
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   key="$1"
 
@@ -65,6 +76,11 @@ while [[ $# -gt 0 ]]; do
     -s|--subscription)
       subscription="$2"
       check_subscription
+      shift 2
+      ;;
+    -y|--years)
+      years="$2"
+      check_years
       shift 2
       ;;
     *)
@@ -87,7 +103,8 @@ show_account()
 create_ad_sp()
 {
   echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-  az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} > ./az_spn.json
+  years="${years:-1}"
+  az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} --years ${years} > ./az_spn.json
   
   spn=$(cat ./az_spn.json)
   rm ./az_spn.json

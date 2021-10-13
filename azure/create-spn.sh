@@ -87,7 +87,7 @@ show_account()
 create_ad_sp()
 {
   echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-  az ad sp create-for-rbac -n ${display_name} --role Owner --scopes /subscriptions/${subscription} > ./az_spn.json
+  az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} > ./az_spn.json
   
   spn=$(cat ./az_spn.json)
   rm ./az_spn.json

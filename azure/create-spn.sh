@@ -20,7 +20,7 @@ show_help()
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
   echo "  -s, --subscription: The Azure Subscription ID used by EDB Cloud."
-  echo "  -y, --years:        The Number of years for which the credentials will be valid. Default: 1 year."
+  echo "  -y, --years:        [Optional] The Number of years for which the credentials will be valid. Only accept positive integer value. Default: 1 year."
   echo "  -h, --help:         Show this help."
   echo ""
 }

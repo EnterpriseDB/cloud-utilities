@@ -104,10 +104,7 @@ create_ad_sp()
 {
   echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
   years="${years:-1}"
-  az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} --years ${years} > ./az_spn.json
-  
-  spn=$(cat ./az_spn.json)
-  rm ./az_spn.json
+  spn=$(az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} --years ${years})
 }
 
 print_result()

@@ -153,9 +153,6 @@ function need_pg_vcpus_for()
 TMP_VM_OUTPUT=/tmp/vm_$$
 TMP_NW_OUTPUT=/tmp/ip_$$
 
-echo "listing usages..."
-echo ""
-
 function query_all_usage()
 {
     az vm list-usage -l $location -o table > $TMP_VM_OUTPUT
@@ -230,7 +227,10 @@ printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basi
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(suggestion $gap_publicip_standard)"
 
 echo ""
-echo "listing SKUs..."
-echo ""
 
-az vm list-skus -l westus2 -o table | grep -E "Standard_DS2_v2|Standard_E2s_v3|ResourceType"
+skus=$(az vm list-skus -l westus2 -o table | grep -E "Standard_DS2_v2|Standard_E2s_v3")
+
+FMT="%-17s %-12s %-23s %-8s %-64s\n"
+printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
+printf "$FMT" "------------" "---------" "----" "-----" "------------"
+printf "%s\n" "$skus"

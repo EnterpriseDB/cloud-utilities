@@ -153,6 +153,9 @@ function need_pg_vcpus_for()
 TMP_VM_OUTPUT=/tmp/vm_$$
 TMP_NW_OUTPUT=/tmp/ip_$$
 
+echo "listing usages..."
+echo ""
+
 function query_all_usage()
 {
     az vm list-usage -l $location -o table > $TMP_VM_OUTPUT
@@ -225,3 +228,9 @@ printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${f
 printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(suggestion $gap_esv3_vcpus)"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(suggestion $gap_publicip_basic)"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(suggestion $gap_publicip_standard)"
+
+echo ""
+echo "listing SKUs..."
+echo ""
+
+az vm list-skus -l westus2 -o table | grep -E "Standard_DS2_v2|Standard_E2s_v3|ResourceType"

@@ -190,7 +190,7 @@ function handle_http_error()
     local error=$(< $resp jq -r $error_key)
     local description=$(< $resp jq -r $error_detail_key)
 
-    if ! [ "${ERROR}" = 'null' ]; then
+    if ! [ "${ERROR}" = 'null' ] && ! [ "${ERROR}" = "" ]; then
         if [ "$format" = 'json' ]; then
             < $resp jq .
         else

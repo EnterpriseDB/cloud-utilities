@@ -152,6 +152,7 @@ function need_pg_vcpus_for()
 # call azure-cli to for usages of VM and Network
 TMP_VM_OUTPUT=/tmp/vm_$$
 TMP_NW_OUTPUT=/tmp/ip_$$
+TMP_SKU_OUTPUT=/tmp/sku_$$
 
 function query_all_usage()
 {
@@ -159,13 +160,31 @@ function query_all_usage()
     az network list-usages -l $location -o table > $TMP_NW_OUTPUT
 }
 
+function query_skus()
+{
+    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
+}
+
 query_all_usage $location
+query_skus $location
 
 # parse VM usage
 function get_vm_usage_for()
 {
     local what=$1
     < $TMP_VM_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
+}
+
+function get_sku_zone_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
+}
+
+function get_sku_restriction_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
 }
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
@@ -225,3 +244,11 @@ printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${f
 printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(suggestion $gap_esv3_vcpus)"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(suggestion $gap_publicip_basic)"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(suggestion $gap_publicip_standard)"
+
+echo ""
+
+FMT="%-17s %-22s %-23s %-8s %-s\n"
+printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
+printf "$FMT" "------------" "---------" "----" "-----" "------------"
+printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(get_sku_restriction_for Standard_DS2_v2)"
+printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(get_sku_restriction_for Standard_E2s_v3)"

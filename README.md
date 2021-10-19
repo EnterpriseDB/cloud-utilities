@@ -12,11 +12,14 @@ where the scripts provided in this repository are used:
 
 ## Scripts
 
-### Calculate Azure Resource Quotas
+### Check Azure subscription readiness for running EDB Cloud
 
-[resource-quotas.sh](./azure/resource-quotas.sh) is a script used to calculate
-if the Azure resource quota in your Azure subscription can meet the requirement
-of the EDB Cloud.
+[resource-quotas.sh](./azure/resource-quotas.sh) is a script used to check the
+Azure subscription readiness for running the EDB Cloud by:
+- calculating if the Azure resource quota in your Azure subscription can meet
+ the requirement of the EDB Cloud?
+- if your any of your Azure provider has not been registered?
+- if the virtual-machine SKU in the given region has any restriction
 
 It calls to Azure CLI and queries some specific resource types and check if there is
 still available resources can be allocated for the dedicated use by EDB Cloud.

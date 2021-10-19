@@ -1,4 +1,28 @@
 #!/bin/bash
+#
+# This script is used as a prerequisite check to tell you if the given location
+# in your Azure subscription can meet the requirement for EDB Cloud to create the
+# PostgreSQL cluster in.
+#
+# Given one the below input:
+#   - location
+#   - PostgreSQL cluster's type (only support Azure ESv3 series)
+#   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - network type (private, or public)
+# it checks the below requirement in the location:
+#   - if there is enough Virtual Machine quota left for this PostgreSQL cluster type
+#     in your Azure subscription
+#   - if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
+#     cluster's type (of the Virtual Machine)
+#   - if there is enough IP left to expose the service for you to access the
+#     PostgreSQL cluster
+#
+# The output of this script tells any unsatisfied condition and report in the form
+# of table.
+#
+# For more details, please refer to:
+#  https://www.enterprisedb.com/docs/edbcloud/latest/getting_started/01_check_resource_limits/#increasing-network-quota
+#
 set -e
 
 function show_help()

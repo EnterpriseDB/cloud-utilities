@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# This script is used as a helper to follow an OAuth2 device code flow based
+# procedure to authenticate to EDB Cloud service and obtain a token for
+# accessing the EDB Cloud API.
+#
 
 BASE_URL=${BASE_URL:-https://portal.edbcloud.com}
 TMPDIR=$(mktemp -d)
@@ -16,11 +21,12 @@ function show_help()
     echo "Usage:"
     echo "  $0 [flags] [options]"
     echo ""
-    echo "      --format  json | plain         [optional] output format, default 'json'"
-    echo "      --refresh <refresh_token>      [optional] query for tokens again by the given refresh_token"
-    echo "                                     this revokes and rotates the given refresh token, "
-    echo "                                     please remember the newly returned refresh_token for"
-    echo "                                     the next use"
+    echo "      -o, --format  json | plain         [optional] output format, default 'json'"
+    echo "      -r, --refresh <refresh_token>      [optional] query for tokens again by the given refresh_token"
+    echo "                                         this revokes and rotates the given refresh token, "
+    echo "                                         please remember the newly returned refresh_token for"
+    echo "                                         the next use"
+    echo "      -h, --help                         show this help message"
     echo ""
     echo "Reference: https://www.enterprisedb.com/docs/edbcloud/latest/reference/ "
     echo ""
@@ -48,13 +54,15 @@ while [[ $# -gt 0 ]]; do
   case $key in
     -o|--format)
       format="$2"
-      shift # past argument
-      shift # past value
+      shift 2
       ;;
     -r|--refresh)
       REFRESH_TOKEN="$2"
-      shift # past argument
-      shift # past value
+      shift 2
+      ;;
+    -h|--help)
+      show_help
+      exit 0
       ;;
     *)    # unknown option
       POSITIONAL+=("$1") # save it in an array for later
@@ -148,35 +156,73 @@ function get_by_refresh_token()
      --data "refresh_token=$REFRESH_TOKEN" > token_resp || cat token_resp || exit 1
 }
 
+function exchange_edbcloud_token()
+{
+    local raw_token=$1
+    curl -s --request POST \
+     --url "$BASE_URL/api/v1/auth/token" \
+     --header "content-type: application/json" \
+     --data "{\"token\":\"$raw_token\"}" > edbcloud_token_resp || cat edbcloud_token_resp || exit 1
+    # Response Sample
+    # {
+    #   "token": "eyJhbGciOifQ.eyJhdWQiONjxxxxxxxxxxxxx"
+    # }
+    #
+    # error Response Sample
+    # {
+    #   "error": {
+    #      "status": 500,
+    #      "message": "Internal Server Error",
+    #      "details": "failed to get EDB Cloud token",
+    #      "reference": "upmrid/wTb-9lB08A0U6Jpr06688/ByASWaOlHzB3fUp-BBXZe",
+    #      "source": "API"
+    #   }
+    # }
+    #
+}
+
+function handle_http_error()
+{
+    local resp=$1
+    local error_key=$2
+    local error_detail_key=$3
+
+    local error=$(< $resp jq -r $error_key)
+    local description=$(< $resp jq -r $error_detail_key)
+
+    if ! [ "${ERROR}" = 'null' ]; then
+        if [ "$format" = 'json' ]; then
+            < $resp jq .
+        else
+            echo "error: $error"
+            echo "details: $description"
+        fi
+        exit 1
+    fi
+}
+
 # choose proper method to get the token
 if [ -z "${REFRESH_TOKEN}" ]; then
     get_by_device_code
 else
     get_by_refresh_token
 fi
+handle_http_error token_resp .error .error_description
 
-# Handle possible error
-ERROR=$(< token_resp jq -r .error)
-ERROR_DESCRIPTION=$(< token_resp jq -r .error_description)
-
-if ! [ "${ERROR}" = 'null' ]; then
-    if [ "$format" = 'json' ]; then
-        cat token_resp | jq .
-    else
-        # echo "error: $ERROR"
-        echo "error: $ERROR_DESCRIPTION"
-    fi
-    exit 1
-fi
+# exchange the raw access_token to EDB Cloud token
+# and handle the error
+exchange_edbcloud_token $(< token_resp jq -r .access_token)
+handle_http_error edbcloud_token_resp .error.message .error.details
 
 function print_result()
 {
+    # Always substitute the access_token with the one exchanged
+    # from EDB Cloud portal API
     if [ "$format" = 'json' ]; then
-        cat token_resp | jq .
+        < token_resp jq ".access_token=$(< edbcloud_token_resp jq .token) | del(.id_token)"
     else
         # Parse token
-        ACCESS_TOKEN=$(< token_resp jq -r .access_token)
-        ID_TOKEN=$(< token_resp jq -r .id_token)
+        ACCESS_TOKEN=$(< edbcloud_token_resp jq -r .token)
         REFRESH_TOKEN=$(< token_resp jq -r .refresh_token)
         EXPIRES_IN=$(< token_resp jq -r .expires_in)
 
@@ -188,9 +234,9 @@ function print_result()
         echo $REFRESH_TOKEN
         echo ""
 
-        echo "#######   ID Token    ###############"
-        echo $ID_TOKEN
-        echo ""
+        #echo "#######   ID Token    ###############"
+        #echo $ID_TOKEN
+        #echo ""
 
         echo "#####   Expires In Seconds ##########"
         echo $EXPIRES_IN

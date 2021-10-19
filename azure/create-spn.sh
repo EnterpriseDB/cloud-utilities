@@ -1,5 +1,24 @@
 #!/bin/bash
-
+#
+# This script is used to create a SPN(Service Principal Name) with enough
+# permissions in your Azure subscription for handling the EDB Cloud managed
+# service.
+#
+# What it does:
+#   - assume you have already login to your Azure AD(Active Directory) directory by Azure CLI
+#   - set your Azure CLI context to the given subscription
+#   - create a new client app in the Azure AD directory
+#   - assign this client app the role of "ower" of the given subscription
+#
+# it finally outputs the:
+#   - client app Id
+#   - client app secret
+#   - your Azure subscription Id
+# These outputs will be used in the EDB Cloud Signup submission form.
+#
+# For more details, please refer to
+#  https://www.enterprisedb.com/docs/edbcloud/latest/getting_started/02_connect_cloud_account
+#
 set -e
 
 display_name=""

@@ -9,13 +9,16 @@
 #   - PostgreSQL cluster's type (only support Azure ESv3 series)
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
-# it checks the below requirement in the location:
-#   - if there is enough Virtual Machine quota left for this PostgreSQL cluster type
-#     in your Azure subscription
-#   - if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
-#     cluster's type (of the Virtual Machine)
-#   - if there is enough IP left to expose the service for you to access the
-#     PostgreSQL cluster
+# it checks the below requirement:
+#   - of the subscription for:
+#     * the necessary Azure providers have been registered
+#   - of the location in this subscription:
+#     * if there is enough Virtual Machine quota left for this PostgreSQL cluster type
+#       in your Azure subscription
+#     * if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
+#       cluster's type (of the Virtual Machine)
+#     * if there is enough IP left to expose the service for you to access the
+#       PostgreSQL cluster
 #
 # The output of this script tells any unsatisfied condition and report in the form
 # of table.
@@ -173,42 +176,69 @@ function need_pg_vcpus_for()
     echo $((vcpu*replica))
 }
 
-# call azure-cli to for usages of VM and Network
-TMP_VM_OUTPUT=/tmp/vm_$$
-TMP_NW_OUTPUT=/tmp/ip_$$
-TMP_SKU_OUTPUT=/tmp/sku_$$
+echo ""
+echo "#######################"
+echo "# Azure Information   #"
+echo "#######################"
+echo ""
+# print azure information
+az_subscrb=$(az account list -o table | grep -i true | awk '{print $(NF-2)}')
+az account show -s $az_subscrb -o table
 
+# call azure-cli to for usages of VM and Network
+TMPDIR=$(mktemp -d)
+
+function _cleanup {
+  rm -rf "${TMPDIR}"
+}
+trap _cleanup EXIT
+pushd "${TMPDIR}" > /dev/null 2>&1 || exit
+
+TMP_VM_OUTPUT=$TMPDIR/vm_$$
+TMP_NW_OUTPUT=$TMPDIR/ip_$$
+TMP_SKU_OUTPUT=$TMPDIR/sku_$$
+TMP_PROVIDER_OUTPUT=$TMPDIR/provider_$$
+TMP_SUGGESTION=$TMPDIR/suggestions_$$
+
+function suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m'
+    if [ "$highlight" = 'alert' ]; then
+        echo "${RED}${what}${NC}"
+    else
+        echo "${GREEN}${what}${NC}"
+    fi
+}
+
+function store_suggestion()
+{
+    echo "$1" >> $TMP_SUGGESTION
+}
+
+#### Quota Limitation Checking
 function query_all_usage()
 {
     az vm list-usage -l $location -o table > $TMP_VM_OUTPUT
     az network list-usages -l $location -o table > $TMP_NW_OUTPUT
 }
 
-function query_skus()
-{
-    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
-}
-
+echo ""
+echo "#######################"
+echo "# Quota Limitation    #"
+echo "#######################"
+echo ""
 query_all_usage $location
-query_skus $location
 
 # parse VM usage
 function get_vm_usage_for()
 {
     local what=$1
     < $TMP_VM_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
-}
-
-function get_sku_zone_for()
-{
-    local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
-}
-
-function get_sku_restriction_for()
-{
-    local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
 }
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
@@ -245,34 +275,130 @@ gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
 
-# print azure information
-az_subscrb=$(az account list -o table | grep -i true | awk '{print $(NF-2)}')
-az account show -s $az_subscrb -o table
-
-echo ""
-
-function suggestion()
+function quota_suggest()
 {
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    NC='\033[0m'
-    [ "$1" -le 0 ] && echo "${RED}Need Increase${NC}" || echo "${GREEN}OK${NC}"
+    local gap=$1
+    local resource=$2
+    if [ "$gap" -le 0 ]; then
+        store_suggestion "Resource '$resource' quota in '$location' has a gap of '$gap'"
+        suggest "Need Increase" alert
+    else
+        suggest "OK" ok
+    fi
 }
 
-# print result
+# print region resources quota limitation checking result
 FMT="%-32s %-8s %-8s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Limit" "Used" "Available" "Gap" "Suggestion"
 printf "$FMT" "--------" "-----" "----" "---------" "---" "----------"
-printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $gap_regional_vcpus "$(suggestion $gap_regional_vcpus)"
-printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${free_dsv2_vcpus} $gap_dsv2_vcpus "$(suggestion $gap_dsv2_vcpus)"
-printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(suggestion $gap_esv3_vcpus)"
-printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(suggestion $gap_publicip_basic)"
-printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(suggestion $gap_publicip_standard)"
+printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
+printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${free_dsv2_vcpus} $gap_dsv2_vcpus "$(quota_suggest $gap_dsv2_vcpus "Standard DSv2 Family vCPUs")"
+printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
+printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
+printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
+
+#### SKU Checking
+function query_skus()
+{
+    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
+}
+
+function get_sku_zone_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
+}
+
+function get_sku_restriction_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
+}
+
+function sku_suggest()
+{
+    local restriction=$1
+    local sku=$2
+    if [ "$restriction" = "None" ]; then
+        suggest "$restriction" ok
+    else
+        store_suggestion "virtualMachines SKU '$sku' has '$restriction'"
+        suggest "$restriction" alert
+    fi
+}
 
 echo ""
+echo "#######################"
+echo "# Virtual-Machine SKU #"
+echo "#######################"
+echo ""
+query_skus $location
+sku_restriction_dsv2=$(get_sku_restriction_for Standard_DS2_v2)
+sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 
-FMT="%-17s %-22s %-23s %-8s %-s\n"
+# print region Azure VM SKU checking result
+FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(get_sku_restriction_for Standard_DS2_v2)"
-printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(get_sku_restriction_for Standard_E2s_v3)"
+printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(sku_suggest "$sku_restriction_dsv2" "Standard_DS2_v2")"
+printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
+
+
+#### Azure Provider Checking
+REQUIRED_PROVIDER=(
+  "Microsoft.Compute"
+  "Microsoft.ContainerService"
+  "Microsoft.KeyVault"
+  "Microsoft.ManagedIdentity"
+  "Microsoft.Network"
+  "Microsoft.OperationalInsights"
+  "Microsoft.OperationsManagement"
+  "Microsoft.Portal"
+  "Microsoft.Storage"
+)
+
+function query_provider_list()
+{
+    az provider list -o table > $TMP_PROVIDER_OUTPUT
+}
+
+function provider_suggest()
+{
+    local st=$1
+    local what=$2
+    if [ "$st" = "Registered" ]; then
+        suggest "$st" ok
+    else
+        store_suggestion "Provider '$what' is '$st'"
+        suggest "$st" alert
+    fi
+}
+
+echo ""
+echo "#######################"
+echo "# Provider            #"
+echo "#######################"
+echo ""
+query_provider_list
+
+# print the provider checking result
+FMT="%-40s %-21s %-20b %-s\n"
+printf "$FMT" "Namespace"                               "RegistrationPolicy"   "RegistrationState"   "ProviderAuthorizationConsentState"
+printf "$FMT" "---------------------------------------" "--------------------" "-------------------" "-----------------------------------"
+for required_provider in ${REQUIRED_PROVIDER[@]}; do
+    col=($(< $TMP_PROVIDER_OUTPUT grep -w $required_provider))
+    provider_namespace=${col[0]}
+    registration_policy=${col[1]}
+    registation_state=${col[2]}
+    provider_authorization_consent_state=${col[3]}
+    printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
+done
+
+
+#### Print Final Suggestions Result
+echo ""
+echo "#######################"
+echo "# Overall Suggestions #"
+echo "#######################"
+echo ""
+cat $TMP_SUGGESTION

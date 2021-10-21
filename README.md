@@ -14,7 +14,7 @@ where the scripts provided in this repository are used:
 
 ### Check Azure subscription readiness for running EDB Cloud
 
-[resource-quotas.sh](./azure/resource-quotas.sh) is a script used to check the
+[azure-preflight.sh](./azure/azure-preflight.sh) is a script used to check the
 Azure subscription readiness for running the EDB Cloud by:
 - calculating if the Azure resource quota in your Azure subscription can meet
  the requirement of the EDB Cloud?

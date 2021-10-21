@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# This script is used as a prerequisite check to tell you if the given location
+# This script is used as a preflight check to tell if the given location
 # in your Azure subscription can meet the requirement for EDB Cloud to create the
 # PostgreSQL cluster in.
 #
@@ -199,6 +199,7 @@ TMP_NW_OUTPUT=$TMPDIR/ip_$$
 TMP_SKU_OUTPUT=$TMPDIR/sku_$$
 TMP_PROVIDER_OUTPUT=$TMPDIR/provider_$$
 TMP_SUGGESTION=$TMPDIR/suggestions_$$
+touch $TMP_SUGGESTION
 
 function suggest()
 {

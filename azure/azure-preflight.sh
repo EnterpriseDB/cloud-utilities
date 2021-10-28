@@ -13,10 +13,10 @@
 #   - of the subscription for:
 #     * the necessary Azure providers have been registered
 #   - of the location in this subscription:
-#     * if there is enough Virtual Machine quota left for this PostgreSQL cluster type
-#       in your Azure subscription
 #     * if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
 #       cluster's type (of the Virtual Machine)
+#     * if there is enough Virtual Machine quota left for this PostgreSQL cluster type
+#       in your Azure subscription
 #     * if there is enough IP left to expose the service for you to access the
 #       PostgreSQL cluster
 #
@@ -221,6 +221,104 @@ function store_suggestion()
     echo "$1" >> $TMP_SUGGESTION
 }
 
+#### Azure Provider Checking
+REQUIRED_PROVIDER=(
+  "Microsoft.Compute"
+  "Microsoft.ContainerService"
+  "Microsoft.KeyVault"
+  "Microsoft.ManagedIdentity"
+  "Microsoft.Network"
+  "Microsoft.OperationalInsights"
+  "Microsoft.OperationsManagement"
+  "Microsoft.Portal"
+  "Microsoft.Storage"
+)
+
+function query_provider_list()
+{
+    az provider list -o table > $TMP_PROVIDER_OUTPUT
+}
+
+function provider_suggest()
+{
+    local st=$1
+    local what=$2
+    if [ "$st" = "Registered" ]; then
+        suggest "$st" ok
+    else
+        store_suggestion "Provider '$what' is '$st'"
+        suggest "$st" alert
+    fi
+}
+
+echo ""
+echo "#######################"
+echo "# Provider            #"
+echo "#######################"
+echo ""
+query_provider_list
+
+# print the provider checking result
+FMT="%-40s %-21s %-20b %-s\n"
+printf "$FMT" "Namespace"                               "RegistrationPolicy"   "RegistrationState"   "ProviderAuthorizationConsentState"
+printf "$FMT" "---------------------------------------" "--------------------" "-------------------" "-----------------------------------"
+for required_provider in ${REQUIRED_PROVIDER[@]}; do
+    col=($(< $TMP_PROVIDER_OUTPUT grep -w $required_provider))
+    provider_namespace=${col[0]}
+    registration_policy=${col[1]}
+    registation_state=${col[2]}
+    provider_authorization_consent_state=${col[3]}
+    printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
+done
+
+#### SKU Checking
+function query_skus()
+{
+    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
+}
+
+function get_sku_zone_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
+}
+
+function get_sku_restriction_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
+}
+
+function sku_suggest()
+{
+    local restriction=$1
+    local sku=$2
+    if [ "$restriction" = "None" ]; then
+        suggest "$restriction" ok
+    else
+        store_suggestion "virtualMachines SKU '$sku' has '$restriction'"
+        suggest "$restriction" alert
+    fi
+}
+
+echo ""
+echo "#######################"
+echo "# Virtual-Machine SKU #"
+echo "#######################"
+echo ""
+query_skus $location
+sku_restriction_dsv2=$(get_sku_restriction_for Standard_DS2_v2)
+sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
+
+# print region Azure VM SKU checking result
+FMT="%-17s %-22s %-23s %-8s %-b\n"
+printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
+printf "$FMT" "------------" "---------" "----" "-----" "------------"
+printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(sku_suggest "$sku_restriction_dsv2" "Standard_DS2_v2")"
+printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
+
+
+
 #### Quota Limitation Checking
 function query_all_usage()
 {
@@ -297,103 +395,6 @@ printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${f
 printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
-
-#### SKU Checking
-function query_skus()
-{
-    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
-}
-
-function get_sku_zone_for()
-{
-    local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
-}
-
-function get_sku_restriction_for()
-{
-    local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
-}
-
-function sku_suggest()
-{
-    local restriction=$1
-    local sku=$2
-    if [ "$restriction" = "None" ]; then
-        suggest "$restriction" ok
-    else
-        store_suggestion "virtualMachines SKU '$sku' has '$restriction'"
-        suggest "$restriction" alert
-    fi
-}
-
-echo ""
-echo "#######################"
-echo "# Virtual-Machine SKU #"
-echo "#######################"
-echo ""
-query_skus $location
-sku_restriction_dsv2=$(get_sku_restriction_for Standard_DS2_v2)
-sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
-
-# print region Azure VM SKU checking result
-FMT="%-17s %-22s %-23s %-8s %-b\n"
-printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
-printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(sku_suggest "$sku_restriction_dsv2" "Standard_DS2_v2")"
-printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
-
-
-#### Azure Provider Checking
-REQUIRED_PROVIDER=(
-  "Microsoft.Compute"
-  "Microsoft.ContainerService"
-  "Microsoft.KeyVault"
-  "Microsoft.ManagedIdentity"
-  "Microsoft.Network"
-  "Microsoft.OperationalInsights"
-  "Microsoft.OperationsManagement"
-  "Microsoft.Portal"
-  "Microsoft.Storage"
-)
-
-function query_provider_list()
-{
-    az provider list -o table > $TMP_PROVIDER_OUTPUT
-}
-
-function provider_suggest()
-{
-    local st=$1
-    local what=$2
-    if [ "$st" = "Registered" ]; then
-        suggest "$st" ok
-    else
-        store_suggestion "Provider '$what' is '$st'"
-        suggest "$st" alert
-    fi
-}
-
-echo ""
-echo "#######################"
-echo "# Provider            #"
-echo "#######################"
-echo ""
-query_provider_list
-
-# print the provider checking result
-FMT="%-40s %-21s %-20b %-s\n"
-printf "$FMT" "Namespace"                               "RegistrationPolicy"   "RegistrationState"   "ProviderAuthorizationConsentState"
-printf "$FMT" "---------------------------------------" "--------------------" "-------------------" "-----------------------------------"
-for required_provider in ${REQUIRED_PROVIDER[@]}; do
-    col=($(< $TMP_PROVIDER_OUTPUT grep -w $required_provider))
-    provider_namespace=${col[0]}
-    registration_policy=${col[1]}
-    registation_state=${col[2]}
-    provider_authorization_consent_state=${col[3]}
-    printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
-done
 
 
 #### Print Final Suggestions Result

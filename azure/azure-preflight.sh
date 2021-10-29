@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # This script is used as a preflight check to tell if the given location
-# in your Azure subscription can meet the requirement for EDB Cloud to create the
+# in your Azure subscription can meet the requirement for BigAnimal to create the
 # PostgreSQL cluster in.
 #
 # Given one the below input:
@@ -38,7 +38,7 @@
 # of table.
 #
 # For more details, please refer to:
-#  https://www.enterprisedb.com/docs/edbcloud/latest/getting_started/01_check_resource_limits/#increasing-network-quota
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits/#increasing-network-quota
 #
 set -e
 

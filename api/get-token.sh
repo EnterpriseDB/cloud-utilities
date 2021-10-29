@@ -16,11 +16,11 @@
 
 #
 # This script is used as a helper to follow an OAuth2 device code flow based
-# procedure to authenticate to EDB Cloud service and obtain a token for
-# accessing the EDB Cloud API.
+# procedure to authenticate to BigAnimal service and obtain a token for
+# accessing the BigAnimal API.
 #
 
-BASE_URL=${BASE_URL:-https://portal.edbcloud.com}
+BASE_URL=${BASE_URL:-https://portal.biganimal.com}
 TMPDIR=$(mktemp -d)
 
 function _cleanup {
@@ -31,7 +31,7 @@ pushd "${TMPDIR}" > /dev/null 2>&1 || exit
 
 function show_help()
 {
-    echo "Get Tokens for EDB Cloud API"
+    echo "Get Tokens for BigAnimal API"
     echo ""
     echo "Usage:"
     echo "  $0 [flags] [options]"
@@ -43,7 +43,7 @@ function show_help()
     echo "                                         the next use"
     echo "      -h, --help                         show this help message"
     echo ""
-    echo "Reference: https://www.enterprisedb.com/docs/edbcloud/latest/reference/ "
+    echo "Reference: https://www.enterprisedb.com/docs/biganimal/latest/reference/ "
     echo ""
 }
 
@@ -94,9 +94,9 @@ curl -s ${BASE_URL}/api/v1/auth/provider > provider_resp || cat provider_resp ||
 # response sample
 # {
 #   "clientId": "pM8PRguGtW9yVnrsvrvpaPyyeS9fVvFh",
-#   "issuerUri": "https://auth.edbcloud.com",
+#   "issuerUri": "https://auth.biganimal.com",
 #   "scope": "openid profile email offline_access",
-#   "audience": "https://portal.edbcloud.com/api"
+#   "audience": "https://portal.biganimal.com/api"
 # }
 
 CLIENT_ID=$(< provider_resp jq -r .clientId)
@@ -120,10 +120,10 @@ function get_by_device_code()
     # {
     #   "device_code": "KEOY2_5YjuVsRuIrrR-aq5gs",
     #   "user_code": "HHHJ-MMSZ",
-    #   "verification_uri": "https://auth.edbcloud.com/activate",
+    #   "verification_uri": "https://auth.biganimal.com/activate",
     #   "expires_in": 900,
     #   "interval": 5,
-    #   "verification_uri_complete": "https://auth.edbcloud.com/activate?user_code=HHHJ-MMSZ"
+    #   "verification_uri_complete": "https://auth.biganimal.com/activate?user_code=HHHJ-MMSZ"
     # }
     DEVICE_CODE=$(< code_resp jq -r .device_code)
     USER_CODE=$(< code_resp jq -r .user_code)
@@ -131,7 +131,7 @@ function get_by_device_code()
 
     # Guide the user to finish the AuthN flow on Web Browser
 
-    echo "Please login to ${VERIFICATION_URI_COMPLETE} with your EDB Cloud account"
+    echo "Please login to ${VERIFICATION_URI_COMPLETE} with your BigAnimal account"
 
     while ! [ "${input}" = "y" ]; do
       read -p "Have you finished the login successfully? (y/N) " input
@@ -171,13 +171,13 @@ function get_by_refresh_token()
      --data "refresh_token=$REFRESH_TOKEN" > token_resp || cat token_resp || exit 1
 }
 
-function exchange_edbcloud_token()
+function exchange_biganimal_token()
 {
     local raw_token=$1
     curl -s --request POST \
      --url "$BASE_URL/api/v1/auth/token" \
      --header "content-type: application/json" \
-     --data "{\"token\":\"$raw_token\"}" > edbcloud_token_resp || cat edbcloud_token_resp || exit 1
+     --data "{\"token\":\"$raw_token\"}" > biganimal_token_resp || cat biganimal_token_resp || exit 1
     # Response Sample
     # {
     #   "token": "eyJhbGciOifQ.eyJhdWQiONjxxxxxxxxxxxxx"
@@ -188,7 +188,7 @@ function exchange_edbcloud_token()
     #   "error": {
     #      "status": 500,
     #      "message": "Internal Server Error",
-    #      "details": "failed to get EDB Cloud token",
+    #      "details": "failed to get BigAnimal token",
     #      "reference": "upmrid/wTb-9lB08A0U6Jpr06688/ByASWaOlHzB3fUp-BBXZe",
     #      "source": "API"
     #   }
@@ -224,20 +224,20 @@ else
 fi
 handle_http_error token_resp .error .error_description
 
-# exchange the raw access_token to EDB Cloud token
+# exchange the raw access_token to BigAnimal token
 # and handle the error
-exchange_edbcloud_token $(< token_resp jq -r .access_token)
-handle_http_error edbcloud_token_resp .error.message .error.details
+exchange_biganimal_token $(< token_resp jq -r .access_token)
+handle_http_error biganimal_token_resp .error.message .error.details
 
 function print_result()
 {
     # Always substitute the access_token with the one exchanged
-    # from EDB Cloud portal API
+    # from BigAnimal portal API
     if [ "$format" = 'json' ]; then
-        < token_resp jq ".access_token=$(< edbcloud_token_resp jq .token) | del(.id_token)"
+        < token_resp jq ".access_token=$(< biganimal_token_resp jq .token) | del(.id_token)"
     else
         # Parse token
-        ACCESS_TOKEN=$(< edbcloud_token_resp jq -r .token)
+        ACCESS_TOKEN=$(< biganimal_token_resp jq -r .token)
         REFRESH_TOKEN=$(< token_resp jq -r .refresh_token)
         EXPIRES_IN=$(< token_resp jq -r .expires_in)
 

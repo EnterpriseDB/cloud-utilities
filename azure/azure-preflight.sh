@@ -44,13 +44,28 @@ set -e
 
 function show_help()
 {
-    echo "Usage:"
-    echo "   $0 --location <location> --pgtype <pg-type> --endpoint <endpoint> [--ha] [--with-infra]"
+    echo "Usage: biganimal-preflight-azure [options] <target-subscription> <region>"
     echo ""
-    echo "     The available locations: ${AVAILABLE_LOCATIONS[@]}"
-    echo "     The available PG types: ${AVAILABLE_PGTYPE[@]}"
-    echo "     The available endpoints: ${AVAILABLE_ENDPOINTS[@]}"
-    echo ""
+    echo "Arguments:"
+    echo "    <target-subscription>    Azure subscription for BigAnimal deployment"
+    echo "    <region>                 Azure region for BigAnimal deployment"
+    echo
+    echo "Options:"
+    echo "    -h, --help               Print this help message"
+    echo "    -o, --onboard            BigAnimal onboarding mode; default; excludes other options"
+    echo "    -i, --instance-type      Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
+    echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
+    echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
+    echo
+    echo "Behavior defaults to --onboard if no other options provided."
+    echo
+    echo "Examples:"
+    echo "    biganimal-preflight-azure --onboard 12412-1515 eastus2"
+    echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private"
+    echo
+    echo "Available regions are: ${AVAILABLE_LOCATIONS[@]}"
+    echo "Available instance types are: ${AVAILABLE_PGTYPE[@]}"
+    echo "Available endpoint flavors: ${AVAILABLE_ENDPOINTS[@]}"
 }
 
 AVAILABLE_ENDPOINTS=(
@@ -91,27 +106,22 @@ while [[ $# -gt 0 ]]; do
   key="$1"
 
   case $key in
-    -l|--location)
-      location="$2"
-      shift # past argument
-      shift # past value
-      ;;
-    -t|--pgtype)
+    -i|--instance-type)
       pg_type="$2"
       shift # past argument
       shift # past value
       ;;
     -e|--endpoint)
       endpoint="$2"
-      shift # post argument
-      shift # post value
+      shift # past argument
+      shift # past value
       ;;
-    --ha)
+    -a|--high-availability)
       ha=true
       shift # past argument
       ;;
-    --with-infra)
-      with_infra=true
+    -o|--onboard)
+      onboard=true
       shift # past argument
       ;;
     *)    # unknown option

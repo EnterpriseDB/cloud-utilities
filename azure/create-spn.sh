@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # This script is used to create a SPN(Service Principal Name) with enough
-# permissions in your Azure subscription for handling the EDB Cloud managed
+# permissions in your Azure subscription for handling the BigAnimal managed
 # service.
 #
 # What it does:
@@ -28,7 +28,7 @@
 #   - client app Id
 #   - client app secret
 #   - your Azure subscription Id
-# These outputs will be used in the EDB Cloud Signup submission form.
+# These outputs will be used in the BigAnimal Signup submission form.
 #
 # For more details, please refer to
 #  https://www.enterprisedb.com/docs/edbcloud/latest/getting_started/02_connect_cloud_account
@@ -52,7 +52,7 @@ show_help()
   echo ""
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
-  echo "  -s, --subscription: The Azure Subscription ID used by EDB Cloud."
+  echo "  -s, --subscription: The Azure Subscription ID used by BigAnimal."
   echo "  -y, --years:        [Optional] The Number of years for which the credentials will be valid. Only accept positive integer value. Default: 1 year."
   echo "  -h, --help:         Show this help."
   echo ""

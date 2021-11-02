@@ -1,6 +1,6 @@
 # Cloud utilities
 
-This repository contains utilities and scripts to help on using [EDB Cloud][1]
+This repository contains utilities and scripts to help on using [BigAnimal][1]
 
 ## Requirement
 
@@ -12,33 +12,33 @@ where the scripts provided in this repository are used:
 
 ## Scripts
 
-### Check Azure subscription readiness for running EDB Cloud
+### Check Azure subscription readiness for running BigAnimal
 
 [azure-preflight.sh](./azure/azure-preflight.sh) is a script used to check the
-Azure subscription readiness for running the EDB Cloud by:
+Azure subscription readiness for running the BigAnimal by:
+
 - calculating if the Azure resource quota in your Azure subscription can meet
- the requirement of the EDB Cloud?
+  the requirement of the BigAnimal?
 - if your any of your Azure provider has not been registered?
 - if the virtual-machine SKU in the given region has any restriction
 
 It calls to Azure CLI and queries some specific resource types and check if there is
-still available resources can be allocated for the dedicated use by EDB Cloud.
+still available resources can be allocated for the dedicated use by BigAnimal.
 
-### Get Token for EDB Cloud API
+### Get Token for BigAnimal API
 
 [get-token.sh](./api/get-token.sh) is a script to obtain a token for accessing
-the [EDB Cloud API][2].
+the [BigAnimal API][2].
 
-For more details about EDB Cloud API, please refer to [Using the EDB Cloud API][5]
+For more details about BigAnimal API, please refer to [Using the BigAnimal API][5]
 
-### Create a Azure AD SPN for EDB Cloud Signup
+### Create a Azure AD SPN for BigAnimal Signup
 
 [create-spn.sh](./azure/create-spn.sh) is a script used to create a SPN with enough
-permissions. The output can be used in EDB Cloud Signup page.
+permissions. The output can be used in BigAnimal Signup page.
 
-
-[1]: https://www.enterprisedb.com/docs/edbcloud/latest/
-[2]: https://portal.edbcloud.com/api/docs/
+[1]: https://www.enterprisedb.com/docs/biganimal/latest/
+[2]: https://portal.biganimal.com/api/docs/
 [3]: https://stedolan.github.io/jq/
 [4]: https://docs.microsoft.com/en-us/cli/azure/
-[5]: https://www.enterprisedb.com/docs/edbcloud/latest/reference
+[5]: https://www.enterprisedb.com/docs/biganimal/latest/reference

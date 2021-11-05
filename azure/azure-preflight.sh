@@ -237,16 +237,29 @@ function store_suggestion()
 
 #### Azure Subscription Checking
 function validate_subscription() {
-  account=$(az account show -s $1 -o json)
-  state=$(echo $account | jq .state | tr -d '"')
+  state=$(echo $1 | jq .state | tr -d '"')
   if [ "$state" != "Enabled" ]; then
-    suggest "Azure subscription $1 state should be Enabled" alert
+    suggest "Azure subscription $az_subscrb state should be Enabled" alert
   fi
   tenant_id=$(echo $account | jq .tenantId | tr -d '"')
   suggest "make sure the tenant $tenant_id is the same as the one provided to EDB" ok
 }
 
-validate_subscription $az_subscrb
+account=$(az account show -s $az_subscrb -o json)
+validate_subscription "$account"
+
+#### Azure User Role Assignment Checking
+function validate_role_assignment() {
+  user_name=$(echo $1 | jq .user.name | tr -d '"')
+  count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
+  if [ "$count" = "0" ]; then
+    suggest "Current user $user_name should have Owner role of the subscription $az_subscrb to continue" alert
+  fi
+}
+
+validate_role_assignment "$account"
+
+exit 1
 
 #### Azure Provider Checking
 REQUIRED_PROVIDER=(

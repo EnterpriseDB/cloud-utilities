@@ -235,6 +235,19 @@ function store_suggestion()
     echo "$1" >> $TMP_SUGGESTION
 }
 
+#### Azure Subscription Checking
+function validate_subscription() {
+  account=$(az account show -s $1 -o json)
+  state=$(echo $account | jq .state | tr -d '"')
+  if [ "$state" != "Enabled" ]; then
+    suggest "Azure subscription $1 state should be Enabled" alert
+  fi
+  tenant_id=$(echo $account | jq .tenantId | tr -d '"')
+  suggest "make sure the tenant $tenant_id is the same as the one provided to EDB" ok
+}
+
+validate_subscription $az_subscrb
+
 #### Azure Provider Checking
 REQUIRED_PROVIDER=(
   "Microsoft.Compute"

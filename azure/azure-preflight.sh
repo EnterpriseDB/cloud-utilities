@@ -254,12 +254,12 @@ function validate_role_assignment() {
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
     suggest "Current user $user_name should have Owner role of the subscription $az_subscrb to continue" alert
+    return 1
   fi
+  return 0
 }
 
-validate_role_assignment "$account"
-
-exit 1
+validate_role_assignment "$account" || (cat $TMP_SUGGESTION && exit 1)
 
 #### Azure Provider Checking
 REQUIRED_PROVIDER=(

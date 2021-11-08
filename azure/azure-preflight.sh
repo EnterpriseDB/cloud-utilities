@@ -264,6 +264,18 @@ function validate_role_assignment() {
 
 validate_role_assignment "$account"
 
+#### Azure User Type Checking
+function validate_user_type() {
+  user_type=$(az ad signed-in-user show -o json | jq .userType | tr -d '"')
+  if [ "$user_type" != "Member" ]; then
+    msg="Current user is a $user_type user, not Member user"
+    store_suggestion "$msg"
+    suggest "$msg" alert
+  fi
+}
+
+validate_user_type
+
 #### Azure Provider Checking
 REQUIRED_PROVIDER=(
   "Microsoft.ContainerInstance"
@@ -448,4 +460,9 @@ echo "# Overall Suggestions #"
 echo "#######################"
 echo ""
 cat $TMP_SUGGESTION
+
+echo ""
+echo "Please open a ticket to Azure if need to raise quota limit. For example:"
+az support tickets create --only-show-errors -h | sed -n -e '/Generic Quota increase/,/^\s*$/ p'
+echo "Run \033[0;32maz support tickets create --help\033[0m for more examples."
 

@@ -59,7 +59,6 @@ AVAILABLE_ENDPOINTS=(
 )
 
 AVAILABLE_LOCATIONS=(
-    australiaeast
     brazilsouth
     canadacentral
     centralus
@@ -71,7 +70,6 @@ AVAILABLE_LOCATIONS=(
     southcentralus
     uksouth
     westeurope
-    westus
     westus2
 )
 
@@ -239,13 +237,10 @@ function store_suggestion()
 function validate_subscription() {
   state=$(echo $1 | jq .state | tr -d '"')
   if [ "$state" != "Enabled" ]; then
-    msg="Azure subscription $az_subscrb state should be Enabled"
-    store_suggestion "$msg"
-    suggest "$msg" alert
+    store_suggestion "Azure subscription $az_subscrb state should be Enabled"
   fi
   tenant_id=$(echo $account | jq .tenantId | tr -d '"')
-  msg="Make sure the tenant $tenant_id is the same as the one provided to EDB"
-  store_suggestion "$msg"
+  store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
 }
 
 account=$(az account show -s $az_subscrb -o json)
@@ -256,9 +251,7 @@ function validate_role_assignment() {
   user_name=$(echo $1 | jq .user.name | tr -d '"')
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
-    msg="Current user $user_name should have Owner role of the subscription $az_subscrb to continue"
-    store_suggestion "$msg"
-    suggest "$msg" alert
+    store_suggestion "Current user $user_name should have Owner role of the subscription $az_subscrb to continue"
   fi
 }
 
@@ -266,11 +259,9 @@ validate_role_assignment "$account"
 
 #### Azure User Type Checking
 function validate_user_type() {
-  user_type=$(az ad signed-in-user show -o json | jq .userType | tr -d '"')
+  user_type=$(az ad signed-in-user show --query userType -o tsv)
   if [ "$user_type" != "Member" ]; then
-    msg="Current user is a $user_type user, not Member user"
-    store_suggestion "$msg"
-    suggest "$msg" alert
+    store_suggestion "Current user is a $user_type user, not Member user"
   fi
 }
 

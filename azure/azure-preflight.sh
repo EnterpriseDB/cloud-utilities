@@ -246,7 +246,6 @@ function validate_subscription() {
   tenant_id=$(echo $account | jq .tenantId | tr -d '"')
   msg="Make sure the tenant $tenant_id is the same as the one provided to EDB"
   store_suggestion "$msg"
-  suggest "$msg" ok
 }
 
 account=$(az account show -s $az_subscrb -o json)
@@ -267,6 +266,7 @@ validate_role_assignment "$account"
 
 #### Azure Provider Checking
 REQUIRED_PROVIDER=(
+  "Microsoft.ContainerInstance"
   "Microsoft.Compute"
   "Microsoft.ContainerService"
   "Microsoft.KeyVault"
@@ -448,3 +448,4 @@ echo "# Overall Suggestions #"
 echo "#######################"
 echo ""
 cat $TMP_SUGGESTION
+

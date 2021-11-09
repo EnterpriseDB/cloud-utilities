@@ -251,7 +251,7 @@ function validate_role_assignment() {
   user_name=$(echo $1 | jq .user.name | tr -d '"')
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
-    store_suggestion "Current user $user_name should have Owner role of the subscription $az_subscrb to continue"
+    store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $az_subscrb"
   fi
 }
 
@@ -453,7 +453,7 @@ echo ""
 cat $TMP_SUGGESTION
 
 echo ""
-echo "Please open a ticket to Azure if need to raise quota limit. For example:"
-az support tickets create --only-show-errors -h | sed -n -e '/Generic Quota increase/,/^\s*$/ p'
-echo "Run \033[0;32maz support tickets create --help\033[0m for more examples."
+echo "Please open a ticket to Azure if need to raise quota limit."
+echo "Open https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest for more info."
+echo -e "You can also run \033[0;32maz support tickets create --help\033[0m for more examples."
 

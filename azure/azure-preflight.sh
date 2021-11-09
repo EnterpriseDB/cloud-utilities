@@ -395,6 +395,7 @@ function get_vm_usage_for()
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
 dsv2_vcpus=($(get_vm_usage_for "Standard DSv2 Family vCPUs"))
+dv4_vcpus=($(get_vm_usage_for "Standard Dv4 Family vCPUs"))
 esv3_vcpus=($(get_vm_usage_for "Standard ESv3 Family vCPUs"))
 
 # parse network usage

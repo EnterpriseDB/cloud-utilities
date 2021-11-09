@@ -74,6 +74,7 @@ AVAILABLE_LOCATIONS=(
 )
 
 AVAILABLE_PGTYPE=(
+  d2_v4
   e2s_v3
   e4s_v3
   e8s_v3
@@ -135,6 +136,11 @@ function infra_dsv2_vcpus()
     [ -z "$with_infra" ] && echo 0 || echo 6
 }
 
+function infra_dv4_vcpus()
+{
+    [ -z "$with_infra" ] && echo 0 || echo 6
+}
+
 function infra_esv3_vcpus()
 {
     [ -z "$with_infra" ] && echo 0 || echo 6
@@ -155,6 +161,9 @@ function need_pg_vcpus_for()
     [ "$ha" = "true" ] && replica=3
 
     case $pg_type in
+      d2_v4)
+        vcpu=2
+        ;;
       e2s_v3)
         vcpu=2
         ;;
@@ -355,6 +364,7 @@ echo "#######################"
 echo ""
 query_skus $location
 sku_restriction_dsv2=$(get_sku_restriction_for Standard_DS2_v2)
+sku_restriction_d2v4=$(get_sku_restriction_for Standard_D2_v4)
 sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 
 # print region Azure VM SKU checking result
@@ -362,6 +372,7 @@ FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
 printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(sku_suggest "$sku_restriction_dsv2" "Standard_DS2_v2")"
+printf "$FMT" "virtualMachines" "$location" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
 printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
 
 
@@ -389,6 +400,7 @@ function get_vm_usage_for()
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
 dsv2_vcpus=($(get_vm_usage_for "Standard DSv2 Family vCPUs"))
+dv4_vcpus=($(get_vm_usage_for "Standard Dv4 Family vCPUs"))
 esv3_vcpus=($(get_vm_usage_for "Standard ESv3 Family vCPUs"))
 
 # parse network usage
@@ -404,12 +416,14 @@ publicip_standard=($(get_nw_usage_for "Public IP Addresses - Standard"))
 # calculate available resources
 free_regional_vcpus=$((${regional_vcpus[1]} - ${regional_vcpus[0]}))
 free_dsv2_vcpus=$((${dsv2_vcpus[1]} - ${dsv2_vcpus[0]}))
+free_dv4_vcpus=$((${dv4_vcpus[1]} - ${dv4_vcpus[0]}))
 free_esv3_vcpus=$((${esv3_vcpus[1]} - ${esv3_vcpus[0]}))
 free_publicip_basic=$((${publicip_basic[1]} - ${publicip_basic[0]}))
 free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
 need_dsv2_vcpus=$(infra_dsv2_vcpus)
+need_dv4_vcpus=$(infra_dv4_vcpus)
 need_esv3_vcpus=$(($(need_pg_vcpus_for $pg_type $ha)+$(infra_esv3_vcpus)))
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
@@ -417,6 +431,7 @@ need_publicip_standard=$(need_public_ip)
 # calculate gap of "need - free"
 gap_regional_vcpus=$((free_regional_vcpus - need_esv3_vcpus - need_dsv2_vcpus))
 gap_dsv2_vcpus=$((free_dsv2_vcpus - need_dsv2_vcpus))
+gap_dv4_vcpus=$((free_dv4_vcpus - need_dv4_vcpus))
 gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
@@ -439,6 +454,7 @@ printf "$FMT" "Resource" "Limit" "Used" "Available" "Gap" "Suggestion"
 printf "$FMT" "--------" "-----" "----" "---------" "---" "----------"
 printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
 printf "$FMT" "Standard DSv2 Family vCPUs" ${dsv2_vcpus[1]} ${dsv2_vcpus[0]} ${free_dsv2_vcpus} $gap_dsv2_vcpus "$(quota_suggest $gap_dsv2_vcpus "Standard DSv2 Family vCPUs")"
+printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free_dv4_vcpus} $gap_dv4_vcpus "$(quota_suggest $gap_dv4_vcpus "Standard Dv4 Family vCPUs")"
 printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"

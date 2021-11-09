@@ -74,6 +74,7 @@ AVAILABLE_LOCATIONS=(
 )
 
 AVAILABLE_PGTYPE=(
+  d2_v4
   e2s_v3
   e4s_v3
   e8s_v3
@@ -155,6 +156,9 @@ function need_pg_vcpus_for()
     [ "$ha" = "true" ] && replica=3
 
     case $pg_type in
+      d2_v4)
+        vcpu=2
+        ;;
       e2s_v3)
         vcpu=2
         ;;
@@ -355,6 +359,7 @@ echo "#######################"
 echo ""
 query_skus $location
 sku_restriction_dsv2=$(get_sku_restriction_for Standard_DS2_v2)
+sku_restriction_d2v4=$(get_sku_restriction_for Standard_D2_v4)
 sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 
 # print region Azure VM SKU checking result
@@ -362,6 +367,7 @@ FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
 printf "$FMT" "virtualMachines" "$location" "Standard_DS2_v2" "$(get_sku_zone_for Standard_DS2_v2)" "$(sku_suggest "$sku_restriction_dsv2" "Standard_DS2_v2")"
+printf "$FMT" "virtualMachines" "$location" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
 printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
 
 

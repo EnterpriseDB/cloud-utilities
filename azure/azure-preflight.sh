@@ -63,7 +63,7 @@ function show_help()
     echo "    biganimal-preflight-azure --onboard 12412-1515 eastus2"
     echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private"
     echo
-    echo "Available regions are: ${AVAILABLE_LOCATIONS[@]}"
+    echo "Available regions are: ${AVAILABLE_REGIONS[@]}"
     echo "Available instance types are: ${AVAILABLE_PGTYPE[@]}"
     echo "Available endpoint flavors: ${AVAILABLE_ENDPOINTS[@]}"
 }
@@ -73,7 +73,8 @@ AVAILABLE_ENDPOINTS=(
   private
 )
 
-AVAILABLE_LOCATIONS=(
+AVAILABLE_REGIONS=(
+    australiaeast
     brazilsouth
     canadacentral
     centralus
@@ -99,7 +100,6 @@ AVAILABLE_PGTYPE=(
   e64s_v3
 )
 
-location=""
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -133,12 +133,17 @@ done
 
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-[ -z "$location" ] && show_help && echo "error: missed -l to specify Azure location" && exit 1
 [ -z "$pg_type" ] && show_help && echo "error: missed -t to specify PG instance type" && exit 1
 [ -z "$endpoint" ] && show_help && echo "error: missed -e to specify endpoint" && exit 1
 [[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${location}" ]] && show_help && echo "error: invalid location" && exit 1
 [[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] && show_help && echo "error: invalid PG instance type" && exit 1
 [[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] && show_help && echo "error: invalid endpoint" && exit 1
+region=$2
+[ -z "$region" ] && show_help && exit 1
+[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
+    && echo "error: invalid region" \
+    && show_help \
+    && exit 1
 
 function infra_dv4_vcpus()
 {
@@ -328,12 +333,6 @@ for required_provider in ${REQUIRED_PROVIDER[@]}; do
     printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
 done
 
-#### SKU Checking
-function query_skus()
-{
-    az vm list-skus -l $location -o table > $TMP_SKU_OUTPUT
-}
-
 function get_sku_zone_for()
 {
     local what=$1
@@ -363,7 +362,7 @@ echo "#######################"
 echo "# Virtual-Machine SKU #"
 echo "#######################"
 echo ""
-query_skus $location
+az vm list-skus -l $region -o table > $TMP_SKU_OUTPUT
 sku_restriction_d2v4=$(get_sku_restriction_for Standard_D2_v4)
 sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 
@@ -371,22 +370,16 @@ sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$location" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
-printf "$FMT" "virtualMachines" "$location" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
-
-#### Quota Limitation Checking
-function query_all_usage()
-{
-    az vm list-usage -l $location -o table > $TMP_VM_OUTPUT
-    az network list-usages -l $location -o table > $TMP_NW_OUTPUT
-}
+printf "$FMT" "virtualMachines" "$region" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
+printf "$FMT" "virtualMachines" "$region" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
 
 echo ""
 echo "#######################"
 echo "# Quota Limitation    #"
 echo "#######################"
 echo ""
-query_all_usage $location
+az vm list-usage -l $region -o table > $TMP_VM_OUTPUT
+az network list-usages -l $region -o table > $TMP_NW_OUTPUT
 
 # parse VM usage
 function get_vm_usage_for()
@@ -435,7 +428,7 @@ function quota_suggest()
     local gap=$1
     local resource=$2
     if [ "$gap" -le 0 ]; then
-        store_suggestion "Resource '$resource' quota in '$location' has a gap of '$gap'"
+        store_suggestion "Resource '$resource' quota in '$region' has a gap of '$gap'"
         suggest "Need Increase" alert
     else
         suggest "OK" ok

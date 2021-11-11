@@ -298,11 +298,6 @@ REQUIRED_PROVIDER=(
   "Microsoft.Storage"
 )
 
-function query_provider_list()
-{
-    az provider list -o table > $TMP_PROVIDER_OUTPUT
-}
-
 function provider_suggest()
 {
     local st=$1
@@ -320,7 +315,7 @@ echo "#######################"
 echo "# Provider            #"
 echo "#######################"
 echo ""
-query_provider_list
+az provider list -o table > $TMP_PROVIDER_OUTPUT
 
 # print the provider checking result
 FMT="%-40s %-21s %-20b %-s\n"

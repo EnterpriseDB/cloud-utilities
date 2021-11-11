@@ -52,10 +52,10 @@ function show_help()
     echo
     echo "Options:"
     echo "    -h, --help               Print this help message"
-    echo "    -o, --onboard            BigAnimal onboarding mode; default; excludes other options"
     echo "    -i, --instance-type      Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
     echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
     echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
     echo
     echo "Behavior defaults to --onboard if no other options provided."
     echo
@@ -124,8 +124,8 @@ while [[ $# -gt 0 ]]; do
       ha=true
       shift # past argument
       ;;
-    -o|--onboard)
-      onboard=true
+    -r|--activate-region)
+      activate=true
       shift # past argument
       ;;
     *)    # unknown option
@@ -147,7 +147,12 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 # Standard_D2_v4 is used by infra deployment
 function infra_dv4_vcpus()
 {
-    [ -z "$with_infra" ] && echo 0 || echo 8
+    [ -z "$activate" ] && echo 0 || echo 8
+}
+
+function infra_esv3_vcpus()
+{
+    [ -z "$activate" ] && echo 0 || echo 6
 }
 
 function need_public_ip()

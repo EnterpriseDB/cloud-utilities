@@ -103,6 +103,11 @@ AVAILABLE_PGTYPE=(
   e64s_v3
 )
 
+# Default values for trial onboarding
+endpoint="public"
+pg_type="e2s_v3"
+ha=false
+activate=true
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -136,15 +141,21 @@ done
 
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-[ -z "$pg_type" ] && show_help && echo "error: missed -t to specify PG instance type" && exit 1
-[ -z "$endpoint" ] && show_help && echo "error: missed -e to specify endpoint" && exit 1
-[[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${location}" ]] && show_help && echo "error: invalid location" && exit 1
-[[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] && show_help && echo "error: invalid PG instance type" && exit 1
-[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] && show_help && echo "error: invalid endpoint" && exit 1
+subscription=$1
 region=$2
+
+[ -z "$subscription" ] && show_help && exit 1
 [ -z "$region" ] && show_help && exit 1
 [[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
     && echo "error: invalid region" \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] \
+    && echo "error: invalid PG instance type" \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] \
+    && echo "error: invalid endpoint" \
     && show_help \
     && exit 1
 
@@ -206,15 +217,6 @@ function need_pg_vcpus_for()
 
     echo $((vcpu*replica))
 }
-
-echo ""
-echo "#######################"
-echo "# Azure Information   #"
-echo "#######################"
-echo ""
-# print azure information
-az_subscrb=$(az account list -o table | grep -i true | awk '{print $(NF-2)}')
-az account show -s $az_subscrb -o table
 
 # call azure-cli to for usages of VM and Network
 TMPDIR=$(mktemp -d)

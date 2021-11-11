@@ -404,13 +404,14 @@ free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 # calculate required resources
 need_dv4_vcpus=$(infra_vcpus)
 need_esv3_vcpus=$(need_pg_vcpus_for $pg_type $ha)
+need_regional_vcpus=$((need_esv3_vcpus + need_dv4_vcpus))
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
 
 # calculate gap of "need - free"
-gap_regional_vcpus=$((free_regional_vcpus - need_esv3_vcpus - need_dv4_vcpus))
 gap_dv4_vcpus=$((free_dv4_vcpus - need_dv4_vcpus))
 gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
+gap_regional_vcpus=$((free_regional_vcpus - $need_regional_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
 
@@ -420,21 +421,21 @@ function quota_suggest()
     local resource=$2
     if [ "$gap" -le 0 ]; then
         store_suggestion "Resource '$resource' quota in '$region' has a gap of '$gap'"
-        suggest "Need Increase" alert
+        suggest "Increase Quota" alert
     else
         suggest "OK" ok
     fi
 }
 
 # print region resources quota limitation checking result
-FMT="%-32s %-8s %-8s %-11s %-8s %-11b\n"
-printf "$FMT" "Resource" "Limit" "Used" "Available" "Gap" "Suggestion"
-printf "$FMT" "--------" "-----" "----" "---------" "---" "----------"
-printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
-printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free_dv4_vcpus} $gap_dv4_vcpus "$(quota_suggest $gap_dv4_vcpus "Standard Dv4 Family vCPUs")"
-printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
-printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
-printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
+FMT="%-32s %-8s %-8s %-11s %-11s %-8s %-11b\n"
+printf "$FMT" "Resource" "Limit" "Used" "Available" "Required" "Gap" "Suggestion"
+printf "$FMT" "--------" "-----" "----" "---------" "--------" "---" "----------"
+printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_regional_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
+printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free_dv4_vcpus} $need_dv4_vcpus $gap_dv4_vcpus "$(quota_suggest $gap_dv4_vcpus "Standard Dv4 Family vCPUs")"
+printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $need_esv3_vcpus $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
+printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $need_publicip_basic $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
+printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $need_publicip_standard $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
 
 
 #### Print Final Suggestions Result

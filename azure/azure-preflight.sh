@@ -159,15 +159,14 @@ region=$2
     && show_help \
     && exit 1
 
+<<<<<<< HEAD
 # Standard_D2_v4 is used by infra deployment
 function infra_dv4_vcpus()
+=======
+function infra_vcpus()
+>>>>>>> 2332b49 (feat(upm-2667): Update infra calculations)
 {
     [ -z "$activate" ] && echo 0 || echo 8
-}
-
-function infra_esv3_vcpus()
-{
-    [ -z "$activate" ] && echo 0 || echo 6
 }
 
 function need_public_ip()
@@ -416,7 +415,11 @@ free_publicip_basic=$((${publicip_basic[1]} - ${publicip_basic[0]}))
 free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
+<<<<<<< HEAD
 need_dv4_vcpus=$(infra_dv4_vcpus)
+=======
+need_dv4_vcpus=$(infra_vcpus)
+>>>>>>> 2332b49 (feat(upm-2667): Update infra calculations)
 need_esv3_vcpus=$(need_pg_vcpus_for $pg_type $ha)
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)

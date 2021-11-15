@@ -130,14 +130,10 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 [[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] && show_help && echo "error: invalid PG instance type" && exit 1
 [[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] && show_help && echo "error: invalid endpoint" && exit 1
 
+# Standard_D2_v4 is used by infra deployment
 function infra_dv4_vcpus()
 {
     [ -z "$with_infra" ] && echo 0 || echo 8
-}
-
-function infra_esv3_vcpus()
-{
-    [ -z "$with_infra" ] && echo 0 || echo 0
 }
 
 function need_public_ip()
@@ -409,7 +405,7 @@ free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
 need_dv4_vcpus=$(infra_dv4_vcpus)
-need_esv3_vcpus=$(($(need_pg_vcpus_for $pg_type $ha)+$(infra_esv3_vcpus)))
+need_esv3_vcpus=$(need_pg_vcpus_for $pg_type $ha)
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
 

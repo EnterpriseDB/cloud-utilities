@@ -137,7 +137,7 @@ function infra_dv4_vcpus()
 
 function infra_esv3_vcpus()
 {
-    [ -z "$with_infra" ] && echo 0 || echo 6
+    [ -z "$with_infra" ] && echo 0 || echo 0
 }
 
 function need_public_ip()

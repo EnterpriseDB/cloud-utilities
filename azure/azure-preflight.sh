@@ -249,13 +249,13 @@ function store_suggestion()
 function validate_subscription() {
   state=$(echo $1 | jq .state | tr -d '"')
   if [ "$state" != "Enabled" ]; then
-    store_suggestion "Azure subscription $az_subscrb state should be Enabled"
+    store_suggestion "Azure subscription $subscription state should be Enabled"
   fi
   tenant_id=$(echo $account | jq .tenantId | tr -d '"')
   store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
 }
 
-account=$(az account show -s $az_subscrb -o json)
+account=$(az account show -s $subscription -o json)
 validate_subscription "$account"
 
 #### Azure User Role Assignment Checking
@@ -263,7 +263,7 @@ function validate_role_assignment() {
   user_name=$(echo $1 | jq .user.name | tr -d '"')
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
-    store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $az_subscrb"
+    store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
   fi
 }
 

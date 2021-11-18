@@ -264,6 +264,7 @@ function validate_user_type() {
 validate_user_type
 
 #### Azure Provider Checking
+# Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically
 REQUIRED_PROVIDER=(
   "Microsoft.ContainerInstance"
   "Microsoft.Compute"
@@ -275,6 +276,7 @@ REQUIRED_PROVIDER=(
   "Microsoft.OperationsManagement"
   "Microsoft.Portal"
   "Microsoft.Storage"
+  "Microsoft.AlertsManagement"
 )
 
 function query_provider_list()
@@ -382,7 +384,6 @@ function get_vm_usage_for()
 }
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
-dsv2_vcpus=($(get_vm_usage_for "Standard DSv2 Family vCPUs"))
 dv4_vcpus=($(get_vm_usage_for "Standard Dv4 Family vCPUs"))
 esv3_vcpus=($(get_vm_usage_for "Standard ESv3 Family vCPUs"))
 
@@ -410,7 +411,7 @@ need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
 
 # calculate gap of "need - free"
-gap_regional_vcpus=$((free_regional_vcpus - need_esv3_vcpus - need_dsv2_vcpus))
+gap_regional_vcpus=$((free_regional_vcpus - need_esv3_vcpus - need_dv4_vcpus))
 gap_dv4_vcpus=$((free_dv4_vcpus - need_dv4_vcpus))
 gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))

@@ -244,28 +244,30 @@ function validate_subscription() {
 }
 
 account=$(az account show -s $az_subscrb -o json)
+signed_in_user=$(az ad signed-in-user show -o json)
+
 validate_subscription "$account"
 
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
-  user_name=$(echo $1 | jq .user.name | tr -d '"')
+  user_name=$(echo $1 | jq .userPrincipalName | tr -d '"')
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
     store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $az_subscrb"
   fi
 }
 
-validate_role_assignment "$account"
+validate_role_assignment "$signed_in_user"
 
 #### Azure User Type Checking
 function validate_user_type() {
-  user_type=$(az ad signed-in-user show --query userType -o tsv)
+  user_type=$(echo $1 | jq .userType | tr -d '"')
   if [ "$user_type" != "Member" ]; then
     store_suggestion "Current user is a $user_type user, not Member user"
   fi
 }
 
-validate_user_type
+validate_user_type "$signed_in_user"
 
 #### Azure Provider Checking
 # Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically

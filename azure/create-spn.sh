@@ -50,13 +50,13 @@ show_help()
   echo "Required tools:"
   echo "  jq"
   echo "Usage:"
-  echo "  $0 -d NAME -s SUBSCRIPTION_ID [--id CLIENT_ID] [options]"
+  echo "  $0 -d NAME -s SUBSCRIPTION_ID [-i CLIENT_ID] [options]"
   echo ""
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
   echo "  -s, --subscription: The Azure Subscription ID used by BigAnimal."
   echo "  -y, --years:        [Optional] The Number of years for which the credentials will be valid. Only accept positive integer value. Default: 1 year."
-  echo "  -i, --id:           [Optional] The Service Principal Application (client) ID is used for updat"
+  echo "  -i, --id:           [Optional] The Application (client) ID of Service Principal will be updated."
   echo "  -h, --help:         Show this help."
   echo ""
 }
@@ -99,7 +99,6 @@ check_years()
 check_id()
 {
   if [[ -n "${client_id}" ]]; then
-    echo "Update application ${client_id} MS Graph API permissions"
     display_name=$(az ad app show --id "${client_id}" -o tsv --query displayName)
   fi
 }
@@ -151,34 +150,44 @@ show_account()
 
 create_ad_sp()
 {
-  echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-  years="${years:-1}"
-  spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
-    --role Owner --scopes /subscriptions/${subscription} --years ${years})
+  if [[ -z "${client_id}" ]]; then
+    echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
+    years="${years:-1}"
+    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
+      --role Owner --scopes /subscriptions/"${subscription}" --years "${years}")
+  else
+    echo "Update application ${client_id} MS Graph API permissions"
+  fi
   echo "Waiting for Azure AD Service Principal to propagate..."
   sleep 15
+
 }
 
 grant_api_permissions()
 {
   [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
-  object_id=$(az ad app show --id "${client_id}" -o tsv --query objectId)
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   user_object_id=$(az ad signed-in-user show -o tsv --query objectId)
-  # To add owners to application
-  az ad app owner add --id "${client_id}" \
-    --owner-object-id "${sp_object_id}"
 
-  az ad app owner add --id "${client_id}" \
-    --owner-object-id "${user_object_id}"
+  # To add owners to application
+  az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}"
+  az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}"
 
   # To add owners to service principal
-  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}/owners/\$ref \
+  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
     --headers Content-Type=application/json \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
-  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}/owners/\$ref \
+  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
     --headers Content-Type=application/json \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/users/${user_object_id}\"}"
+
+  # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
+  # retrieve Application.ReadWrite.OwnedBy appId: 18a4783c-866b-4cc7-a460-3d5e5662c884
+  # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
+  #   --query "appRoles[?value=='Application.ReadWrite.OwnedBy']"
+  # retrieve Directory.Read.All appId: 7ab1d382-f21e-4acd-a863-ba3e13f7da61
+  # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
+  #  --query "appRoles[?value=='Directory.Read.All']"
 
   # To add API permissions
   # Application.ReadWrite.OwnedBy
@@ -192,7 +201,7 @@ grant_api_permissions()
     --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
 
   echo "Waiting for API permissions to propagate..."
-  sleep 10
+  sleep 30
 
   # To grant admin consent
   az ad app permission admin-consent --id "${client_id}"
@@ -213,6 +222,6 @@ print_result()
 check
 set_subscription
 show_account
-[[ -z "${client_id}" ]] && create_ad_sp
+create_ad_sp
 grant_api_permissions
 print_result

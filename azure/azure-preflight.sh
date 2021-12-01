@@ -59,6 +59,7 @@ AVAILABLE_ENDPOINTS=(
 )
 
 AVAILABLE_LOCATIONS=(
+    australiaeast
     brazilsouth
     canadacentral
     centralus
@@ -67,10 +68,13 @@ AVAILABLE_LOCATIONS=(
     francecentral
     japaneast
     northeurope
+    norwayeast
     southcentralus
+    southeastasia
     uksouth
     westeurope
     westus2
+    westus3
 )
 
 AVAILABLE_PGTYPE=(
@@ -266,6 +270,7 @@ validate_user_type
 #### Azure Provider Checking
 # Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically
 REQUIRED_PROVIDER=(
+  "Microsoft.Capacity"
   "Microsoft.ContainerInstance"
   "Microsoft.Compute"
   "Microsoft.ContainerService"

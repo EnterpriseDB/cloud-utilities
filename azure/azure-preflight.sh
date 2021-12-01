@@ -62,19 +62,15 @@ AVAILABLE_LOCATIONS=(
     australiaeast
     brazilsouth
     canadacentral
-    centralindia
     centralus
     eastus
     eastus2
     francecentral
-    germanywestcentral
     japaneast
-    koreacentral
     northeurope
     norwayeast
     southcentralus
     southeastasia
-    swedencentral
     uksouth
     westeurope
     westus2

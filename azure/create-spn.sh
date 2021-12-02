@@ -103,6 +103,27 @@ check_id()
   fi
 }
 
+retry ()
+{
+  local attempts=5
+  local count=0
+  until "$@"; do
+    # shellcheck disable=SC2004
+    wait=$((3 ** $count))
+    # shellcheck disable=SC2004
+    count=$(($count + 1))
+    if [ $count -lt $attempts ]; then
+      echo "Retrying in $wait seconds..."
+      sleep $wait
+    else
+      echo "Retried $count attempts with failure, please add Service Principal Owners later"
+      echo "$@"
+      return 0
+    fi
+  done
+  return 0
+}
+
 while [[ $# -gt 0 ]]; do
   key="$1"
 
@@ -158,7 +179,7 @@ create_ad_sp()
   else
     echo "Update application ${client_id} MS Graph API permissions"
   fi
-  echo "Waiting for Azure AD Service Principal to propagate..."
+  echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
   sleep 15
 
 }
@@ -169,15 +190,16 @@ grant_api_permissions()
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   user_object_id=$(az ad signed-in-user show -o tsv --query objectId)
 
+  echo "Add Azure AD Service Principal Owners..."
   # To add owners to application
   az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}"
   az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}"
 
   # To add owners to service principal
-  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
     --headers Content-Type=application/json \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
-  az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
     --headers Content-Type=application/json \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/users/${user_object_id}\"}"
 
@@ -190,6 +212,7 @@ grant_api_permissions()
   #  --query "appRoles[?value=='Directory.Read.All']"
 
   # To add API permissions
+  echo "Update API permissions to Azure AD Service Principal..."
   # Application.ReadWrite.OwnedBy
   az ad app permission add --id "${client_id}" --only-show-errors \
     --api 00000003-0000-0000-c000-000000000000 \
@@ -200,12 +223,23 @@ grant_api_permissions()
     --api 00000003-0000-0000-c000-000000000000 \
     --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
 
-  echo "Waiting for API permissions to propagate..."
-  sleep 30
-
+  echo "Grant Admin consent to Azure AD Service Principal..."
   # To grant admin consent
-  az ad app permission admin-consent --id "${client_id}"
-  echo "Admin consent will be effective about one minute later..."
+  resourceId=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query "objectId" --output tsv)
+  az rest --method POST \
+    --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
+    --headers Content-Type=application/json --output none \
+    --body "{
+      \"principalId\": \"${sp_object_id}\",
+      \"resourceId\": \"${resourceId}\",
+      \"appRoleId\": \"18a4783c-866b-4cc7-a460-3d5e5662c884\"}"
+  az rest --method POST \
+    --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
+    --headers Content-Type=application/json --output none \
+    --body "{
+      \"principalId\": \"${sp_object_id}\",
+      \"resourceId\": \"${resourceId}\",
+      \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}"
 }
 
 print_result()

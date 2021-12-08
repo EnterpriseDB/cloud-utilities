@@ -16,13 +16,14 @@
 
 # This script is used to create a SPN(Service Principal Name) with enough
 # permissions in your Azure subscription for handling the BigAnimal managed
-# service.
+# service, or update SPN with MS Graph API permissions.
 #
 # What it does:
 #   - assume you have already login to your Azure AD(Active Directory) directory by Azure CLI
 #   - set your Azure CLI context to the given subscription
-#   - create a new client app in the Azure AD directory
+#   - create a new client app or update client app in the Azure AD directory
 #   - assign this client app the role of "ower" of the given subscription
+#   - grant MS Graph API permissions
 #
 # it finally outputs the:
 #   - client app Id
@@ -38,6 +39,7 @@ set -e
 display_name=""
 subscription=""
 years=""
+client_id=""
 
 spn=""
 
@@ -48,12 +50,13 @@ show_help()
   echo "Required tools:"
   echo "  jq"
   echo "Usage:"
-  echo "  $0 -d NAME -s SUBSCRIPTION_ID [options]"
+  echo "  $0 -d NAME -s SUBSCRIPTION_ID [-i CLIENT_ID] [options]"
   echo ""
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
   echo "  -s, --subscription: The Azure Subscription ID used by BigAnimal."
   echo "  -y, --years:        [Optional] The Number of years for which the credentials will be valid. Only accept positive integer value. Default: 1 year."
+  echo "  -i, --id:           [Optional] The Application (client) ID of Service Principal will be updated."
   echo "  -h, --help:         Show this help."
   echo ""
 }
@@ -93,6 +96,34 @@ check_years()
   fi
 }
 
+check_id()
+{
+  if [[ -n "${client_id}" ]]; then
+    display_name=$(az ad app show --id "${client_id}" -o tsv --query displayName)
+  fi
+}
+
+retry ()
+{
+  local attempts=5
+  local count=0
+  until "$@"; do
+    # shellcheck disable=SC2004
+    wait=$((3 ** $count))
+    # shellcheck disable=SC2004
+    count=$(($count + 1))
+    if [ $count -lt $attempts ]; then
+      echo "Retrying in $wait seconds..."
+      sleep $wait
+    else
+      echo "Retried $count attempts with failure, please add Service Principal Owners later"
+      echo "$@"
+      return 0
+    fi
+  done
+  return 0
+}
+
 while [[ $# -gt 0 ]]; do
   key="$1"
 
@@ -100,6 +131,11 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       show_help
       exit 0
+      ;;
+    -i|--id)
+      client_id="$2"
+      check_id
+      shift 2
       ;;
     -d|--display-name)
       display_name="$2"
@@ -125,7 +161,7 @@ done
 set_subscription()
 {
   echo "Change to use Azure Subscription ${subscription}..."
-  az account set --subscription ${subscription}
+  az account set --subscription "${subscription}"
 }
 
 show_account()
@@ -135,19 +171,85 @@ show_account()
 
 create_ad_sp()
 {
-  echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-  years="${years:-1}"
-  spn=$(az ad sp create-for-rbac -o json -n ${display_name} --role Owner --scopes /subscriptions/${subscription} --years ${years})
+  if [[ -z "${client_id}" ]]; then
+    echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
+    years="${years:-1}"
+    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
+      --role Owner --scopes /subscriptions/"${subscription}" --years "${years}")
+  else
+    echo "Update application ${client_id} MS Graph API permissions"
+  fi
+  echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
+  sleep 15
+
+}
+
+grant_api_permissions()
+{
+  [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
+  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
+  user_object_id=$(az ad signed-in-user show -o tsv --query objectId)
+
+  echo "Add Azure AD Service Principal Owners..."
+  # To add owners to application
+  az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}"
+  az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}"
+
+  # To add owners to service principal
+  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+    --headers Content-Type=application/json \
+    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
+  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+    --headers Content-Type=application/json \
+    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/users/${user_object_id}\"}"
+
+  # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
+  # retrieve Application.ReadWrite.OwnedBy appId: 18a4783c-866b-4cc7-a460-3d5e5662c884
+  # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
+  #   --query "appRoles[?value=='Application.ReadWrite.OwnedBy']"
+  # retrieve Directory.Read.All appId: 7ab1d382-f21e-4acd-a863-ba3e13f7da61
+  # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
+  #  --query "appRoles[?value=='Directory.Read.All']"
+
+  # To add API permissions
+  echo "Update API permissions to Azure AD Service Principal..."
+  # Application.ReadWrite.OwnedBy
+  az ad app permission add --id "${client_id}" --only-show-errors \
+    --api 00000003-0000-0000-c000-000000000000 \
+    --api-permissions 18a4783c-866b-4cc7-a460-3d5e5662c884=Role
+
+  # Directory.Read.All
+  az ad app permission add --id "${client_id}" --only-show-errors \
+    --api 00000003-0000-0000-c000-000000000000 \
+    --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
+
+  echo "Grant Admin consent to Azure AD Service Principal..."
+  # To grant admin consent
+  resourceId=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query "objectId" --output tsv)
+  az rest --method POST \
+    --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
+    --headers Content-Type=application/json --output none \
+    --body "{
+      \"principalId\": \"${sp_object_id}\",
+      \"resourceId\": \"${resourceId}\",
+      \"appRoleId\": \"18a4783c-866b-4cc7-a460-3d5e5662c884\"}"
+  az rest --method POST \
+    --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
+    --headers Content-Type=application/json --output none \
+    --body "{
+      \"principalId\": \"${sp_object_id}\",
+      \"resourceId\": \"${resourceId}\",
+      \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}"
 }
 
 print_result()
 {
-  local client_id=$(echo ${spn} | jq -r .appId)
-  local client_secret=$(echo ${spn} | jq -r .password)
+  local client_secret="N/A"
+  [[ -n "${spn}" ]] && client_secret=$(echo "${spn}" | jq -r .password)
   jq --null-input \
-    --arg client_id ${client_id} \
-    --arg client_secret ${client_secret} \
-    --arg subscription ${subscription} \
+    --arg client_id "${client_id}" \
+    --arg client_secret "${client_secret}" \
+    --arg subscription "${subscription}" \
     '{"client_id":$client_id,"client_secret":$client_secret,"subscription":$subscription}'
 }
 
@@ -155,4 +257,5 @@ check
 set_subscription
 show_account
 create_ad_sp
+grant_api_permissions
 print_result

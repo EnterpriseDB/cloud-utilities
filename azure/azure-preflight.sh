@@ -56,6 +56,7 @@ function show_help()
     echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
     echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
     echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
+    echo "    --onboard                Check if the user and subscription are configured appropriately"
     echo
     echo "Behavior defaults to --onboard if no other options provided."
     echo
@@ -63,7 +64,7 @@ function show_help()
     echo "    biganimal-preflight-azure --onboard 12412-1515 eastus2"
     echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private"
     echo
-    echo "Available regions are: ${AVAILABLE_REGIONS[@]}"
+    echo "Available regions are: ${AVAILABLE_LOCATIONS[@]}"
     echo "Available instance types are: ${AVAILABLE_PGTYPE[@]}"
     echo "Available endpoint flavors: ${AVAILABLE_ENDPOINTS[@]}"
 }
@@ -108,6 +109,7 @@ endpoint="public"
 pg_type="e2s_v3"
 ha=false
 activate=true
+onboard=false
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -132,6 +134,10 @@ while [[ $# -gt 0 ]]; do
       activate=true
       shift # past argument
       ;;
+    --onboard)
+      onboard=true
+      shift # past argument
+      ;;
     *)    # unknown option
       POSITIONAL+=("$1") # save it in an array for later
       shift # past argument
@@ -146,7 +152,7 @@ region=$2
 
 [ -z "$subscription" ] && show_help && exit 1
 [ -z "$region" ] && show_help && exit 1
-[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
+[[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${region}" ]] \
     && echo "error: invalid region" \
     && show_help \
     && exit 1
@@ -159,12 +165,7 @@ region=$2
     && show_help \
     && exit 1
 
-<<<<<<< HEAD
-# Standard_D2_v4 is used by infra deployment
-function infra_dv4_vcpus()
-=======
 function infra_vcpus()
->>>>>>> 2332b49 (feat(upm-2667): Update infra calculations)
 {
     [ -z "$activate" ] && echo 0 || echo 8
 }
@@ -253,7 +254,6 @@ function store_suggestion()
     echo "$1" >> $TMP_SUGGESTION
 }
 
-#### Azure Subscription Checking
 function validate_subscription() {
   state=$(echo $1 | jq .state | tr -d '"')
   if [ "$state" != "Enabled" ]; then
@@ -262,15 +262,6 @@ function validate_subscription() {
   tenant_id=$(echo $account | jq .tenantId | tr -d '"')
   store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
 }
-
-<<<<<<< HEAD
-account=$(az account show -s $az_subscrb -o json)
-signed_in_user=$(az ad signed-in-user show -o json)
-
-=======
-account=$(az account show -s $subscription -o json)
->>>>>>> b28f0af (hack: Fix up subscription references)
-validate_subscription "$account"
 
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
@@ -281,8 +272,6 @@ function validate_role_assignment() {
   fi
 }
 
-validate_role_assignment "$signed_in_user"
-
 #### Azure User Type Checking
 function validate_user_type() {
   user_type=$(echo $1 | jq .userType | tr -d '"')
@@ -291,7 +280,18 @@ function validate_user_type() {
   fi
 }
 
-validate_user_type "$signed_in_user"
+function check_onboard() {
+  #### Azure Subscription Checking
+  account=$(az account show -s $subscription -o json)
+  signed_in_user=$(az ad signed-in-user show -o json)
+  validate_subscription "$account"
+  validate_role_assignment "$signed_in_user"
+  validate_user_type "$signed_in_user"
+}
+
+if [ "$onboard" = "true" ]; then
+  check_onboard
+fi
 
 #### Azure Provider Checking
 # Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically
@@ -333,14 +333,25 @@ az provider list -o table > $TMP_PROVIDER_OUTPUT
 FMT="%-40s %-21s %-20b %-s\n"
 printf "$FMT" "Namespace"                               "RegistrationPolicy"   "RegistrationState"   "ProviderAuthorizationConsentState"
 printf "$FMT" "---------------------------------------" "--------------------" "-------------------" "-----------------------------------"
+
+unavail=false
 for required_provider in ${REQUIRED_PROVIDER[@]}; do
     col=($(< $TMP_PROVIDER_OUTPUT grep -w $required_provider))
     provider_namespace=${col[0]}
     registration_policy=${col[1]}
     registation_state=${col[2]}
     provider_authorization_consent_state=${col[3]}
+    if [[ $registation_state == *"NotRegistered"* ]]; then
+      unavail=true
+    fi
     printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
 done
+
+if [ $unavail = "true" ]; then
+    cat $TMP_SUGGESTION
+    suggest "Register all required providers before continue" alert
+    exit 1
+fi
 
 function get_sku_zone_for()
 {
@@ -388,7 +399,7 @@ echo "# Quota Limitation    #"
 echo "#######################"
 echo ""
 az vm list-usage -l $region -o table > $TMP_VM_OUTPUT
-az network list-usages -l $region -o table > $TMP_NW_OUTPUT
+az network list-usages -l $region -o table > $TMP_NW_OUTPUT || true
 
 # parse VM usage
 function get_vm_usage_for()
@@ -419,20 +430,14 @@ free_publicip_basic=$((${publicip_basic[1]} - ${publicip_basic[0]}))
 free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
-<<<<<<< HEAD
-need_dv4_vcpus=$(infra_dv4_vcpus)
-=======
 need_dv4_vcpus=$(infra_vcpus)
->>>>>>> 2332b49 (feat(upm-2667): Update infra calculations)
 need_esv3_vcpus=$(need_pg_vcpus_for $pg_type $ha)
-need_regional_vcpus=$((need_esv3_vcpus + need_dv4_vcpus))
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
 
 # calculate gap of "need - free"
 gap_dv4_vcpus=$((free_dv4_vcpus - need_dv4_vcpus))
-gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
-gap_regional_vcpus=$((free_regional_vcpus - $need_regional_vcpus))
+gap_regional_vcpus=$((free_regional_vcpus - $need_dv4_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
 
@@ -452,9 +457,9 @@ function quota_suggest()
 FMT="%-32s %-8s %-8s %-11s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Limit" "Used" "Available" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "-----" "----" "---------" "--------" "---" "----------"
-printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_regional_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
+printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_dv4_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
 printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free_dv4_vcpus} $need_dv4_vcpus $gap_dv4_vcpus "$(quota_suggest $gap_dv4_vcpus "Standard Dv4 Family vCPUs")"
-printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $need_esv3_vcpus $gap_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
+printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $need_esv3_vcpus $free_esv3_vcpus "$(quota_suggest $free_esv3_vcpus "Standard ESv3 Family vCPUs")"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $need_publicip_basic $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $need_publicip_standard $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
 

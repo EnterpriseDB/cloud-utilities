@@ -255,17 +255,17 @@ function store_suggestion()
 }
 
 function validate_subscription() {
-  state=$(echo $1 | jq .state | tr -d '"')
+  state=$(echo $1 | jq -r .state)
   if [ "$state" != "Enabled" ]; then
     store_suggestion "Azure subscription $subscription state should be Enabled"
   fi
-  tenant_id=$(echo $account | jq .tenantId | tr -d '"')
+  tenant_id=$(echo $account | jq -r .tenantId)
   store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
 }
 
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
-  user_name=$(echo $1 | jq .userPrincipalName | tr -d '"')
+  user_name=$(echo $1 | jq -r .userPrincipalName)
   count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
   if [ "$count" = "0" ]; then
     store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
@@ -274,7 +274,7 @@ function validate_role_assignment() {
 
 #### Azure User Type Checking
 function validate_user_type() {
-  user_type=$(echo $1 | jq .userType | tr -d '"')
+  user_type=$(echo $1 | jq -r .userType)
   if [ "$user_type" != "Member" ]; then
     store_suggestion "Current user is a $user_type user, not Member user"
   fi
@@ -348,8 +348,8 @@ for required_provider in ${REQUIRED_PROVIDER[@]}; do
 done
 
 if [ $unavail = "true" ]; then
+    store_suggestion "Register all required providers before continue"
     cat $TMP_SUGGESTION
-    suggest "Register all required providers before continue" alert
     exit 1
 fi
 

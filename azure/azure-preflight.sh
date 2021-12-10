@@ -188,6 +188,17 @@ function need_pg_vcpus_for()
     echo $((vcpu*replica))
 }
 
+function check_az_version {
+  version=$(az version --query \"azure-cli\" -o tsv)
+  if command -v clouddrive &> /dev/null; then
+    echo "Run Azure Preflight Checks with azure-cli ${version} in Azure Cloud shell"
+  else
+    [[ "${version}" =~ ^2.30.* ]] && echo "error: upgrade azure-cli to 2.31.0 or later" && exit 1
+    echo "Run Azure Preflight Checks with azure-cli ${version}"
+  fi
+}
+check_az_version
+
 echo ""
 echo "#######################"
 echo "# Azure Information   #"

@@ -151,6 +151,9 @@ subscription=$1
 region=$2
 
 [ -z "$subscription" ] && show_help && exit 1
+# set az cli account to the given subscription to validate it is valid
+az account set -s $subscription
+
 [ -z "$region" ] && show_help && exit 1
 [[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${region}" ]] \
     && echo "error: invalid region" \

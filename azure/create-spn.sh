@@ -43,6 +43,13 @@ client_id=""
 
 spn=""
 
+TMPDIR=$(mktemp -d)
+function cleanup {
+  rm -rf "${TMPDIR}"
+}
+trap cleanup EXIT
+pushd "${TMPDIR}" >/dev/null || exit
+
 show_help()
 {
   echo "Required permissions:"
@@ -116,7 +123,7 @@ retry ()
       echo "Retrying in $wait seconds..."
       sleep $wait
     else
-      echo "Retried $count attempts with failure, please add Service Principal Owners later"
+      echo "Retried $count attempts with failure, please run below command to add Service Principal Owners by Azure AD Global Administrator or Privileged Role Administrator:"
       echo "$@"
       return 0
     fi
@@ -197,12 +204,13 @@ grant_api_permissions()
 
   # To add owners to service principal
   retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
-    --headers Content-Type=application/json \
+    --headers Content-Type=application/json --output none \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
-  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
-    --headers Content-Type=application/json \
-    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/users/${user_object_id}\"}"
+}
 
+admin_consent()
+{
+  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
   # retrieve Application.ReadWrite.OwnedBy appId: 18a4783c-866b-4cc7-a460-3d5e5662c884
   # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
@@ -210,9 +218,7 @@ grant_api_permissions()
   # retrieve Directory.Read.All appId: 7ab1d382-f21e-4acd-a863-ba3e13f7da61
   # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
   #  --query "appRoles[?value=='Directory.Read.All']"
-
   # To add API permissions
-  echo "Update API permissions to Azure AD Service Principal..."
   # Application.ReadWrite.OwnedBy
   az ad app permission add --id "${client_id}" --only-show-errors \
     --api 00000003-0000-0000-c000-000000000000 \
@@ -223,7 +229,6 @@ grant_api_permissions()
     --api 00000003-0000-0000-c000-000000000000 \
     --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
 
-  echo "Grant Admin consent to Azure AD Service Principal..."
   # To grant admin consent
   resourceId=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query "objectId" --output tsv)
   az rest --method POST \
@@ -232,14 +237,15 @@ grant_api_permissions()
     --body "{
       \"principalId\": \"${sp_object_id}\",
       \"resourceId\": \"${resourceId}\",
-      \"appRoleId\": \"18a4783c-866b-4cc7-a460-3d5e5662c884\"}"
+      \"appRoleId\": \"18a4783c-866b-4cc7-a460-3d5e5662c884\"}" 2>${TMPDIR}/OUTPUT || true
   az rest --method POST \
     --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
     --headers Content-Type=application/json --output none \
     --body "{
       \"principalId\": \"${sp_object_id}\",
       \"resourceId\": \"${resourceId}\",
-      \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}"
+      \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}" 2>>${TMPDIR}/OUTPUT || true
+  [[ $(cat ${TMPDIR}/OUTPUT) == *"Authorization_RequestDenied"* ]] && echo -e "\033[0;31mError: Please request Azure AD Global Administrator or Privileged Role Administrator to grant admin consent permissions for Service Principal ${display_name}(${client_id})\033[0m" && exit 1
 }
 
 print_result()
@@ -259,3 +265,4 @@ show_account
 create_ad_sp
 grant_api_permissions
 print_result
+admin_consent

@@ -224,10 +224,23 @@ function need_pg_vcpus_for()
 # call azure-cli to for usages of VM and Network
 TMPDIR=$(mktemp -d)
 
-function _cleanup {
+function _onexit {
+  #### Print Final Suggestions Result
+  echo ""
+  echo "#######################"
+  echo "# Overall Suggestions #"
+  echo "#######################"
+  echo ""
+  cat $TMP_SUGGESTION
+
+  echo ""
+  echo "Please open a ticket to Azure if need to raise quota limit."
+  echo "Open https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest for more info."
+  echo -e "You can also run \033[0;32maz support tickets create --help\033[0m for more examples."
+
   rm -rf "${TMPDIR}"
 }
-trap _cleanup EXIT
+trap _onexit EXIT
 pushd "${TMPDIR}" > /dev/null 2>&1 || exit
 
 TMP_VM_OUTPUT=$TMPDIR/vm_$$
@@ -256,6 +269,18 @@ function store_suggestion()
 {
     echo "$1" >> $TMP_SUGGESTION
 }
+
+#### Check Azure CLI version
+function check_az_version {
+  version=$(az version --query \"azure-cli\" -o tsv)
+  if command -v clouddrive &> /dev/null; then
+    echo "Run Azure Preflight Checks with azure-cli ${version} in Azure Cloud shell"
+  else
+    [[ "${version}" =~ ^2.30.* ]] && suggest "alert" "error: upgrade azure-cli to 2.31.0 or later" && exit 1
+    echo "Run Azure Preflight Checks with azure-cli ${version}"
+  fi
+}
+check_az_version
 
 function validate_subscription() {
   state=$(echo $1 | jq -r .state)
@@ -465,18 +490,4 @@ printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free
 printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $need_esv3_vcpus $free_esv3_vcpus "$(quota_suggest $free_esv3_vcpus "Standard ESv3 Family vCPUs")"
 printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $need_publicip_basic $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $need_publicip_standard $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
-
-
-#### Print Final Suggestions Result
-echo ""
-echo "#######################"
-echo "# Overall Suggestions #"
-echo "#######################"
-echo ""
-cat $TMP_SUGGESTION
-
-echo ""
-echo "Please open a ticket to Azure if need to raise quota limit."
-echo "Open https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest for more info."
-echo -e "You can also run \033[0;32maz support tickets create --help\033[0m for more examples."
 

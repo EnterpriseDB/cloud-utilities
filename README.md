@@ -14,13 +14,13 @@ where the scripts provided in this repository are used:
 
 ### Check Azure subscription readiness for running BigAnimal
 
-[azure-preflight.sh](./azure/azure-preflight.sh) is a script used to check the
+[biganimal-preflight-azure](./azure/biganimal-preflight-azure) is a script used to check the
 Azure subscription readiness for running the BigAnimal by:
 
-- calculating if the Azure resource quota in your Azure subscription can meet
-  the requirement of the BigAnimal?
-- if your any of your Azure provider has not been registered?
+- if your any of your Azure provider has not been registered
 - if the virtual-machine SKU in the given region has any restriction
+- if the Azure resource quota in your Azure subscription can meet the requirement of
+  the BigAnimal
 
 It calls to Azure CLI and queries some specific resource types and check if there is
 still available resources can be allocated for the dedicated use by BigAnimal.

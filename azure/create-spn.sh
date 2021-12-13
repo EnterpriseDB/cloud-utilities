@@ -123,7 +123,7 @@ retry ()
       echo "Retrying in $wait seconds..."
       sleep $wait
     else
-      echo "Retried $count attempts with failure, please run below command to add Service Principal Owners by Azure AD Global administrator:"
+      echo "Retried $count attempts with failure, please run below command to add Service Principal Owners by Azure AD Global Administrator or Privileged Role Administrator:"
       echo "$@"
       return 0
     fi
@@ -245,7 +245,7 @@ admin_consent()
       \"principalId\": \"${sp_object_id}\",
       \"resourceId\": \"${resourceId}\",
       \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}" 2>>${TMPDIR}/OUTPUT || true
-  [[ $(cat ${TMPDIR}/OUTPUT) == *"Authorization_RequestDenied"* ]] && echo -e "\033[0;31mError: Please request Azure AD Global administrator to grant admin consent permissions for Service Principal ${client_id}\033[0m" && exit 1
+  [[ $(cat ${TMPDIR}/OUTPUT) == *"Authorization_RequestDenied"* ]] && echo -e "\033[0;31mError: Please request Azure AD Global Administrator or Privileged Role Administrator to grant admin consent permissions for Service Principal ${display_name}(${client_id})\033[0m" && exit 1
 }
 
 print_result()

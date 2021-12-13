@@ -14,19 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is used as a preflight check to tell if the given location
+# This script is used as a preflight check to tell if the given region
 # in your Azure subscription can meet the requirement for BigAnimal to create the
 # PostgreSQL cluster in.
 #
 # Given one the below input:
-#   - location
+#   - (mandatory) Azure subscription ID
+#   - (mandatory) region
 #   - PostgreSQL cluster's type (only support Azure ESv3 series)
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
 # it checks the below requirement:
-#   - of the subscription for:
-#     * the necessary Azure providers have been registered
-#   - of the location in this subscription:
+#   - the user is the 'owner' of the Azure subscription
+#   - the given Azure subscription has the necessary service providers registered
+#   - the given region:
 #     * if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
 #       cluster's type (of the Virtual Machine)
 #     * if there is enough Virtual Machine quota left for this PostgreSQL cluster type
@@ -61,10 +62,10 @@ function show_help()
     echo "Behavior defaults to --onboard if no other options provided."
     echo
     echo "Examples:"
-    echo "    biganimal-preflight-azure --onboard 12412-1515 eastus2"
-    echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private"
+    echo "    biganimal-preflight-azure --onboard 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
     echo
-    echo "Available regions are: ${AVAILABLE_LOCATIONS[@]}"
+    echo "Available regions are: ${AVAILABLE_REGIONS[@]}"
     echo "Available instance types are: ${AVAILABLE_PGTYPE[@]}"
     echo "Available endpoint flavors: ${AVAILABLE_ENDPOINTS[@]}"
 }
@@ -74,7 +75,7 @@ AVAILABLE_ENDPOINTS=(
   private
 )
 
-AVAILABLE_LOCATIONS=(
+AVAILABLE_REGIONS=(
     australiaeast
     brazilsouth
     canadacentral
@@ -108,7 +109,7 @@ AVAILABLE_PGTYPE=(
 endpoint="public"
 pg_type="e2s_v3"
 ha=false
-activate=true
+activate=false
 onboard=false
 
 POSITIONAL=()
@@ -136,7 +137,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --onboard)
       onboard=true
+      activate=true
       shift # past argument
+      ;;
+    -h|--help)
+      show_help
+      exit 1
       ;;
     *)    # unknown option
       POSITIONAL+=("$1") # save it in an array for later
@@ -155,7 +161,7 @@ region=$2
 az account set -s $subscription
 
 [ -z "$region" ] && show_help && exit 1
-[[ ! " ${AVAILABLE_LOCATIONS[@]}" =~ "${region}" ]] \
+[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
     && echo "error: invalid region" \
     && show_help \
     && exit 1
@@ -170,7 +176,7 @@ az account set -s $subscription
 
 function infra_vcpus()
 {
-    [ -z "$activate" ] && echo 0 || echo 8
+    [ "$activate" = "true" ] && echo 8 || echo 0
 }
 
 function need_public_ip()
@@ -317,9 +323,7 @@ function check_onboard() {
   validate_user_type "$signed_in_user"
 }
 
-if [ "$onboard" = "true" ]; then
-  check_onboard
-fi
+[ "$onboard" = "true" ] && check_onboard
 
 #### Azure Provider Checking
 # Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically
@@ -416,7 +420,7 @@ sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
 
 # print region Azure VM SKU checking result
 FMT="%-17s %-22s %-23s %-8s %-b\n"
-printf "$FMT" "ResourceType" "Locations" "Name" "Zones" "Restrictions"
+printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
 printf "$FMT" "virtualMachines" "$region" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
 printf "$FMT" "virtualMachines" "$region" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"

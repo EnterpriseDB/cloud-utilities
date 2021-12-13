@@ -123,7 +123,7 @@ retry ()
       echo "Retrying in $wait seconds..."
       sleep $wait
     else
-      echo "Retried $count attempts with failure, please add Service Principal Owners later"
+      echo "Retried $count attempts with failure, please run below command to add Service Principal Owners by Azure AD Global administrator:"
       echo "$@"
       return 0
     fi
@@ -206,9 +206,6 @@ grant_api_permissions()
   retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
     --headers Content-Type=application/json --output none \
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
-  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
-    --headers Content-Type=application/json  --output none \
-    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/users/${user_object_id}\"}"
 }
 
 admin_consent()

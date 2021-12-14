@@ -178,6 +178,7 @@ show_account()
 
 create_ad_sp()
 {
+  # create SPN using azure-cli
   if [[ -z "${client_id}" ]]; then
     echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
     years="${years:-1}"
@@ -191,8 +192,9 @@ create_ad_sp()
 
 }
 
-grant_api_permissions()
+add_spn_owners()
 {
+  # add current user and spn to the SPN owner list
   [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   user_object_id=$(az ad signed-in-user show -o tsv --query objectId)
@@ -208,8 +210,9 @@ grant_api_permissions()
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
 }
 
-admin_consent()
+grant_api_permissions()
 {
+  # Add graph API permissions to the SPN, and grant admin consent
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
   # retrieve Application.ReadWrite.OwnedBy appId: 18a4783c-866b-4cc7-a460-3d5e5662c884
@@ -245,7 +248,9 @@ admin_consent()
       \"principalId\": \"${sp_object_id}\",
       \"resourceId\": \"${resourceId}\",
       \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}" 2>>${TMPDIR}/OUTPUT || true
+  # catch Authorization_RequestDenied exception messages
   [[ $(cat ${TMPDIR}/OUTPUT) == *"Authorization_RequestDenied"* ]] && echo -e "\033[0;31mError: Please request Azure AD Global Administrator or Privileged Role Administrator to grant admin consent permissions for Service Principal ${display_name}(${client_id})\033[0m" && exit 1
+  return 0
 }
 
 print_result()
@@ -263,6 +268,6 @@ check
 set_subscription
 show_account
 create_ad_sp
-grant_api_permissions
+add_spn_owners
 print_result
-admin_consent
+grant_api_permissions

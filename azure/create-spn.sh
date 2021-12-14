@@ -191,7 +191,7 @@ create_ad_sp()
 
 }
 
-grant_api_permissions()
+add_spn_owners()
 {
   [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
@@ -208,7 +208,7 @@ grant_api_permissions()
     -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
 }
 
-admin_consent()
+grant_api_permissions()
 {
   sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
   # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
@@ -246,6 +246,7 @@ admin_consent()
       \"resourceId\": \"${resourceId}\",
       \"appRoleId\": \"7ab1d382-f21e-4acd-a863-ba3e13f7da61\"}" 2>>${TMPDIR}/OUTPUT || true
   [[ $(cat ${TMPDIR}/OUTPUT) == *"Authorization_RequestDenied"* ]] && echo -e "\033[0;31mError: Please request Azure AD Global Administrator or Privileged Role Administrator to grant admin consent permissions for Service Principal ${display_name}(${client_id})\033[0m" && exit 1
+  return 0
 }
 
 print_result()
@@ -263,6 +264,6 @@ check
 set_subscription
 show_account
 create_ad_sp
-grant_api_permissions
+add_spn_owners
 print_result
-admin_consent
+grant_api_permissions

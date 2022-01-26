@@ -105,6 +105,44 @@ AVAILABLE_PGTYPE=(
   e64s_v3
 )
 
+# be friendly to bash v3
+function VMTYPE_OF_PGTYPE()
+{
+    local pg_type=$(echo $1 | awk '{print tolower($0)}')
+
+    case $pg_type in
+      e2s_v3)
+        type=Standard_E2s_v3
+        ;;
+      e4s_v3)
+        type=Standard_E4s_v3
+        ;;
+      e8s_v3)
+        type=Standard_E8s_v3
+        ;;
+      e16s_v3)
+        type=Standard_E16s_v3
+        ;;
+      e20s_v3)
+        type=Standard_E20s_v3
+        ;;
+      e32s_v3)
+        type=Standard_E32s_v3
+        ;;
+      e48s_v3)
+        type=Standard_E48s_v3
+        ;;
+      e64s_v3)
+        type=Standard_E64s_v3
+        ;;
+      *)
+        echo "invalid PG type"
+        exit 1
+        ;;
+    esac
+    echo ${type}
+}
+
 # Default values for trial onboarding
 endpoint="public"
 pg_type="e2s_v3"
@@ -414,16 +452,18 @@ echo "#######################"
 echo "# Virtual-Machine SKU #"
 echo "#######################"
 echo ""
+vmsku_mgmt=Standard_D2_v4
+vmsku_pg=$(VMTYPE_OF_PGTYPE ${pg_type})
 az vm list-skus -l $region -o table > $TMP_SKU_OUTPUT
-sku_restriction_d2v4=$(get_sku_restriction_for Standard_D2_v4)
-sku_restriction_e2sv3=$(get_sku_restriction_for Standard_E2s_v3)
+sku_restriction_mgmt=$(get_sku_restriction_for ${vmsku_mgmt})
+sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
 
 # print region Azure VM SKU checking result
 FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$region" "Standard_D2_v4" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_d2v4" "Standard_D2_v4")"
-printf "$FMT" "virtualMachines" "$region" "Standard_E2s_v3" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_e2sv3" "Standard_E2s_v3")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
 
 echo ""
 echo "#######################"

@@ -462,8 +462,8 @@ sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
 FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for Standard_D2_v4)" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
-printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for Standard_E2s_v3)" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for ${vmsku_mgmt})" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for ${vmsku_pg})" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
 
 echo ""
 echo "#######################"

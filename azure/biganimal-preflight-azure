@@ -69,7 +69,7 @@ function show_help()
     echo "Available regions are: "
     echo "  ${AVAILABLE_REGIONS[@]}"
     echo "Available instance types are: "
-    echo "  ${AVAILABLE_INSTACETYPE[@]}"
+    echo "  ${AVAILABLE_INSTANCETYPE[@]}"
     echo "Available endpoint flavors are: "
     echo "  ${AVAILABLE_ENDPOINTS[@]}"
 }
@@ -98,7 +98,7 @@ AVAILABLE_REGIONS=(
     westus3
 )
 
-AVAILABLE_INSTACETYPE=(
+AVAILABLE_INSTANCETYPE=(
   e2s_v3
   e4s_v3
   e8s_v3
@@ -152,12 +152,16 @@ function _toUpper()
 function _extract_instancetype_info()
 {
     local instance_type=$(_toLower $1)
+
+    # extract vcpu/vm_type/vm_family from the given instance_type
     local vcpu=0
+    local serie=""
+    local psa=""
+    local version=""
     local vm_type=""
     local family=""
 
-    # extract vcpu from instance-type
-    # regex pattern of (e)(20)(s)_(v3)
+    # given "e20s_v3", the regex pattern is (e)(20)(s)_(v3)
     if [[ "${instance_type}" =~ ([a-z]*)([0-9]*)([a-z]*)_(v.*) ]]; then
       serie="${BASH_REMATCH[1]}"
       vcpu="${BASH_REMATCH[2]}"
@@ -234,7 +238,7 @@ az account set -s $subscription
     && echo "error: unsupported region - ${region}" \
     && show_help \
     && exit 1
-[[ ! " ${AVAILABLE_INSTACETYPE[@]}" =~ "${instance_type}" ]] \
+[[ ! " ${AVAILABLE_INSTANCETYPE[@]}" =~ "${instance_type}" ]] \
     && echo "error: unsupported Postgres instance type - ${instance_type}" \
     && show_help \
     && exit 1

@@ -21,7 +21,7 @@
 # Given one the below input:
 #   - (mandatory) Azure subscription ID
 #   - (mandatory) region
-#   - PostgreSQL cluster's type (only support Azure ESv3 series)
+#   - PostgreSQL cluster's instance type
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
 # it checks the below requirement:

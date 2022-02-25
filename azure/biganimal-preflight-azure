@@ -39,7 +39,7 @@
 # of table.
 #
 # For more details, please refer to:
-#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits/#increasing-network-quota
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
 #
 set -e
 [ "${BASH_VERSINFO:-0}" -lt 4 ] && echo "This script does not support Bash version 3 and below"

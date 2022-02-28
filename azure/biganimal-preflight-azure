@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Copyright 2021 EnterpriseDB Corporation
+# Copyright 2021,2022 EnterpriseDB Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 # Given one the below input:
 #   - (mandatory) Azure subscription ID
 #   - (mandatory) region
-#   - PostgreSQL cluster's type (only support Azure ESv3 series)
+#   - PostgreSQL cluster's instance type
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
 # it checks the below requirement:
@@ -39,9 +39,10 @@
 # of table.
 #
 # For more details, please refer to:
-#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits/#increasing-network-quota
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
 #
 set -e
+[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo "This script does not support Bash version 3 and below"
 
 function show_help()
 {
@@ -65,9 +66,12 @@ function show_help()
     echo "    biganimal-preflight-azure --onboard 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
     echo "    biganimal-preflight-azure -i e2s_v3 --high-availability -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
     echo
-    echo "Available regions are: ${AVAILABLE_REGIONS[@]}"
-    echo "Available instance types are: ${AVAILABLE_PGTYPE[@]}"
-    echo "Available endpoint flavors: ${AVAILABLE_ENDPOINTS[@]}"
+    echo "Available regions are: "
+    echo "  ${AVAILABLE_REGIONS[@]}"
+    echo "Available instance types are: "
+    echo "  ${AVAILABLE_INSTANCETYPE[@]}"
+    echo "Available endpoint flavors are: "
+    echo "  ${AVAILABLE_ENDPOINTS[@]}"
 }
 
 AVAILABLE_ENDPOINTS=(
@@ -94,7 +98,7 @@ AVAILABLE_REGIONS=(
     westus3
 )
 
-AVAILABLE_PGTYPE=(
+AVAILABLE_INSTANCETYPE=(
   e2s_v3
   e4s_v3
   e8s_v3
@@ -103,49 +107,80 @@ AVAILABLE_PGTYPE=(
   e32s_v3
   e48s_v3
   e64s_v3
+  e2s_v4
+  e4s_v4
+  e8s_v4
+  e16s_v4
+  e20s_v4
+  e32s_v4
+  e48s_v4
+  e64s_v4
+  f2s_v2
+  f4s_v2
+  f8s_v2
+  f16s_v2
+  f32s_v2
+  f48s_v2
+  f64s_v2
+  f72s_v2
+  d2s_v4
+  d4s_v4
+  d8s_v4
+  d16s_v4
+  d32s_v4
+  d48s_v4
+  d64s_v4
+  d2s_v3
+  d4s_v3
+  d8s_v3
+  d16s_v3
+  d32s_v3
+  d48s_v3
+  d64s_v3
 )
 
-# be friendly to bash v3
-function VMTYPE_OF_PGTYPE()
+function _toLower()
 {
-    local pg_type=$(echo $1 | awk '{print tolower($0)}')
+    echo ${1,,}
+}
 
-    case $pg_type in
-      e2s_v3)
-        type=Standard_E2s_v3
-        ;;
-      e4s_v3)
-        type=Standard_E4s_v3
-        ;;
-      e8s_v3)
-        type=Standard_E8s_v3
-        ;;
-      e16s_v3)
-        type=Standard_E16s_v3
-        ;;
-      e20s_v3)
-        type=Standard_E20s_v3
-        ;;
-      e32s_v3)
-        type=Standard_E32s_v3
-        ;;
-      e48s_v3)
-        type=Standard_E48s_v3
-        ;;
-      e64s_v3)
-        type=Standard_E64s_v3
-        ;;
-      *)
-        echo "invalid PG type"
-        exit 1
-        ;;
-    esac
-    echo ${type}
+function _toUpper()
+{
+    echo ${1^^}
+}
+
+function _extract_instancetype_info()
+{
+    local instance_type=$(_toLower $1)
+
+    # extract vcpu/vm_type/vm_family from the given instance_type
+    local vcpu=0
+    local serie=""
+    local psa=""
+    local version=""
+    local vm_type=""
+    local family=""
+
+    # given "e20s_v3", the regex pattern is (e)(20)(s)_(v3)
+    if [[ "${instance_type}" =~ ([a-z]*)([0-9]*)([a-z]*)_(v.*) ]]; then
+      serie="${BASH_REMATCH[1]}"
+      vcpu="${BASH_REMATCH[2]}"
+      psa="${BASH_REMATCH[3]}"
+      version="${BASH_REMATCH[4]}"
+      vm_type="Standard_$(_toUpper $serie)${vcpu}${psa}_${version}"
+      family="Standard $(_toUpper $serie)$(_toUpper ${psa})${version} Family"
+    else
+      echo "Error: unsupported instance type: $1"
+      exit 1
+    fi
+
+    echo "$vcpu" "$vm_type" "$family"
+    return 0
 }
 
 # Default values for trial onboarding
 endpoint="public"
-pg_type="e2s_v3"
+instance_type="e2s_v3"
 ha=false
 activate=false
 onboard=false
@@ -156,7 +191,7 @@ while [[ $# -gt 0 ]]; do
 
   case $key in
     -i|--instance-type)
-      pg_type="$2"
+      instance_type="$2"
       shift # past argument
       shift # past value
       ;;
@@ -200,17 +235,32 @@ az account set -s $subscription
 
 [ -z "$region" ] && show_help && exit 1
 [[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
-    && echo "error: invalid region" \
+    && echo "error: unsupported region - ${region}" \
     && show_help \
     && exit 1
-[[ ! " ${AVAILABLE_PGTYPE[@]}" =~ "${pg_type}" ]] \
-    && echo "error: invalid PG instance type" \
+[[ ! " ${AVAILABLE_INSTANCETYPE[@]}" =~ "${instance_type}" ]] \
+    && echo "error: unsupported Postgres instance type - ${instance_type}" \
     && show_help \
     && exit 1
 [[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] \
-    && echo "error: invalid endpoint" \
+    && echo "error: invalid endpoint flavor - ${endpoint}" \
     && show_help \
     && exit 1
+
+# extract postgres workload used VM instance type info
+instance_type_info=($(_extract_instancetype_info "$instance_type"))
+pg_vm_vcpu=${instance_type_info[0]}
+pg_vm_type=${instance_type_info[1]}
+pg_vm_family="${instance_type_info[2]} ${instance_type_info[3]} ${instance_type_info[4]}"
+[[ "${pg_vm_type}" = "" ]] \
+    && echo "error: unsupported Postgres instance type" \
+    && show_help \
+    && exit 1
+
+# hardcode management workload used VM instance type info
+mgmt_vm_vcpu=2
+mgmt_vm_type="Standard_D2_v4"
+mgmt_vm_family="Standard Dv4 Family"
 
 function infra_vcpus()
 {
@@ -224,43 +274,10 @@ function need_public_ip()
 
 function need_pg_vcpus_for()
 {
-    local pg_type=$(echo $1 | awk '{print tolower($0)}')
+    local vcpu=$1
     local ha=$2
-
     local replica=1
-    local vcpu=0
     [ "$ha" = "true" ] && replica=3
-
-    case $pg_type in
-      e2s_v3)
-        vcpu=2
-        ;;
-      e4s_v3)
-        vcpu=4
-        ;;
-      e8s_v3)
-        vcpu=8
-        ;;
-      e16s_v3)
-        vcpu=16
-        ;;
-      e20s_v3)
-        vcpu=20
-        ;;
-      e32s_v3)
-        vcpu=32
-        ;;
-      e48s_v3)
-        vcpu=48
-        ;;
-      e64s_v3)
-        vcpu=64
-        ;;
-      *)
-        echo "invalid PG type"
-        exit 1
-        ;;
-    esac
 
     echo $((vcpu*replica))
 }
@@ -439,7 +456,7 @@ function sku_suggest()
 {
     local restriction=$1
     local sku=$2
-    if [ "$restriction" = "None" ] || ([[ $restriction == *"type: Zone"* ]] && [ "$sku" = "Standard_D2_v4" ]); then
+    if [ "$restriction" = "None" ] || ([[ $restriction == *"type: Zone"* ]] && [ "$sku" = "$mgmt_vm_type" ]); then
         suggest "None" ok
     else
         store_suggestion "virtualMachines SKU '$sku' has '$restriction'"
@@ -452,8 +469,8 @@ echo "#######################"
 echo "# Virtual-Machine SKU #"
 echo "#######################"
 echo ""
-vmsku_mgmt=Standard_D2_v4
-vmsku_pg=$(VMTYPE_OF_PGTYPE ${pg_type})
+vmsku_mgmt=$mgmt_vm_type
+vmsku_pg=$pg_vm_type
 az vm list-skus -l $region -o table > $TMP_SKU_OUTPUT
 sku_restriction_mgmt=$(get_sku_restriction_for ${vmsku_mgmt})
 sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
@@ -481,8 +498,8 @@ function get_vm_usage_for()
 }
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
-dv4_vcpus=($(get_vm_usage_for "Standard Dv4 Family vCPUs"))
-esv3_vcpus=($(get_vm_usage_for "Standard ESv3 Family vCPUs"))
+mgmt_vcpus=($(get_vm_usage_for "$mgmt_vm_family vCPUs"))
+pg_vcpus=($(get_vm_usage_for "$pg_vm_family vCPUs"))
 
 # parse network usage
 function get_nw_usage_for()
@@ -496,21 +513,21 @@ publicip_standard=($(get_nw_usage_for "Public IP Addresses - Standard"))
 
 # calculate available resources
 free_regional_vcpus=$((${regional_vcpus[1]} - ${regional_vcpus[0]}))
-free_dv4_vcpus=$((${dv4_vcpus[1]} - ${dv4_vcpus[0]}))
-free_esv3_vcpus=$((${esv3_vcpus[1]} - ${esv3_vcpus[0]}))
+free_mgmt_vcpus=$((${mgmt_vcpus[1]} - ${mgmt_vcpus[0]}))
+free_pg_vcpus=$((${pg_vcpus[1]} - ${pg_vcpus[0]}))
 free_publicip_basic=$((${publicip_basic[1]} - ${publicip_basic[0]}))
 free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
-need_dv4_vcpus=$(infra_vcpus)
-need_esv3_vcpus=$(need_pg_vcpus_for $pg_type $ha)
-need_regional_vcpus=$((need_dv4_vcpus + need_esv3_vcpus))
+need_mgmt_vcpus=$(infra_vcpus)
+need_pg_vcpus=$(need_pg_vcpus_for $pg_vm_vcpu $ha)
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus))
 need_publicip_basic=$(need_public_ip)
 need_publicip_standard=$(need_public_ip)
 
 # calculate gap of "need - free"
-gap_dv4_vcpus=$((free_dv4_vcpus - need_dv4_vcpus))
-gap_esv3_vcpus=$((free_esv3_vcpus - need_esv3_vcpus))
+gap_mgmt_vcpus=$((free_mgmt_vcpus - need_mgmt_vcpus))
+gap_pg_vcpus=$((free_pg_vcpus - need_pg_vcpus))
 gap_regional_vcpus=$((free_regional_vcpus - $need_regional_vcpus))
 gap_publicip_basic=$((free_publicip_basic - need_publicip_basic))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
@@ -532,8 +549,7 @@ FMT="%-32s %-8s %-8s %-11s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Limit" "Used" "Available" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "-----" "----" "---------" "--------" "---" "----------"
 printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_regional_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
-printf "$FMT" "Standard Dv4 Family vCPUs" ${dv4_vcpus[1]} ${dv4_vcpus[0]} ${free_dv4_vcpus} $need_dv4_vcpus $gap_dv4_vcpus "$(quota_suggest $gap_dv4_vcpus "Standard Dv4 Family vCPUs")"
-printf "$FMT" "Standard ESv3 Family vCPUs" ${esv3_vcpus[1]} ${esv3_vcpus[0]} ${free_esv3_vcpus} $need_esv3_vcpus $free_esv3_vcpus "$(quota_suggest $gap_esv3_vcpus "Standard ESv3 Family vCPUs")"
-printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} $need_publicip_basic $gap_publicip_basic "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
-printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} $need_publicip_standard $gap_publicip_standard "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
-
+printf "$FMT" "$mgmt_vm_family vCPUs" ${mgmt_vcpus[1]} ${mgmt_vcpus[0]} ${free_mgmt_vcpus} ${need_mgmt_vcpus} ${gap_mgmt_vcpus} "$(quota_suggest $gap_mgmt_vcpus "$mgmt_vm_family vCPUs")"
+printf "$FMT" "$pg_vm_family vCPUs" ${pg_vcpus[1]} ${pg_vcpus[0]} ${free_pg_vcpus} ${need_pg_vcpus} ${gap_pg_vcpus} "$(quota_suggest $gap_pg_vcpus "$pg_vm_family vCPUs")"
+printf "$FMT" "Public IP Addresses - Basic" ${publicip_basic[1]} ${publicip_basic[0]} ${free_publicip_basic} ${need_publicip_basic} ${gap_publicip_basic} "$(quota_suggest $gap_publicip_basic "Public IP Addresses - Basic")"
+printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} ${need_publicip_standard} ${gap_publicip_standard} "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"

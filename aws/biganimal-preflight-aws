@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+#
+# Copyright 2022 EnterpriseDB Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script is used as a preflight check to tell if the given region
+# in your AWS account can meet the requirement for BigAnimal to create the
+# PostgreSQL cluster in.
+#
+# Given one the below input:
+#   - (mandatory) AWS account ID
+#   - (mandatory) region
+#   - PostgreSQL cluster's instance type
+#   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - network type (private, or public)
+# it checks the below requirement:
+#   - the AWS CLI is configured with access to the specified account ID
+#   - the given region:
+#     * if there is enough vCPU quota left for this PostgreSQL cluster type
+#       in your AWS Account
+#     * if there is enough NLB (Network Load Balancer) quota left to expose the service
+#       for you to access the PostgreSQL cluster
+#
+# The output of this script tells any unsatisfied condition and report in the form
+# of table.
+#
+# For more details, please refer to:
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
+#
+set -e
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo -e "${RED}This script does not support Bash version 3 and below${NC}"
+CURRENT_PATH=$(pwd)
+
+function show_help()
+{
+    echo -e "Usage: ${GREEN}biganimal-preflight-aws [options] <account-id> <region>${NC}"
+    echo ""
+    echo "Arguments:"
+    echo "    <account-id>             AWS account ID for BigAnimal deployment"
+    echo "    <region>                 AWS region for BigAnimal deployment"
+    echo
+    echo "Options:"
+    echo "    -h, --help               Print this help message"
+    echo "    -i, --instance-type      AWS Instance Type for BigAnimal cluster, e.g., r5.large"
+    echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
+    echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
+    echo "    --onboard                Check if the user and account are configured appropriately"
+    echo
+    echo "Behavior defaults to --onboard if no other options provided."
+    echo
+    echo "Examples:"
+    echo "    biganimal-preflight-aws --onboard 123456789012 us-east-1"
+    echo "    biganimal-preflight-aws -i r5.2xlarge --high-availability -e private -r 123456789012 us-east-1"
+    echo
+    echo "Available regions are: "
+    echo -e "  ${GREEN}${AVAILABLE_REGIONS[@]}${NC}"
+    echo "Available instance types are: "
+    echo -e "  ${GREEN}${AVAILABLE_INSTANCETYPE[@]}${NC}"
+    echo "Available endpoint flavors are: "
+    echo -e "  ${GREEN}${AVAILABLE_ENDPOINTS[@]}${NC}"
+}
+
+function suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    if [ "$highlight" = 'alert' ]; then
+        echo -e "${RED}${what}${NC}"
+    else
+        echo -e "${GREEN}${what}${NC}"
+    fi
+}
+
+AVAILABLE_ENDPOINTS=(
+  public
+  private
+)
+
+AVAILABLE_REGIONS=(
+  eu-north-1
+  ap-south-1
+  eu-west-3
+  eu-west-2
+  eu-west-1
+  ap-northeast-3
+  ap-northeast-2
+  ap-northeast-1
+  sa-east-1
+  ca-central-1
+  ap-southeast-1
+  ap-southeast-2
+  eu-central-1
+  us-east-1
+  us-east-2
+  us-west-1
+  us-west-2
+)
+
+AVAILABLE_INSTANCETYPE=(
+  r5.large
+  r5.xlarge
+  r5.2xlarge
+  r5.4xlarge
+  r5.8xlarge
+  r5.12xlarge
+  r5.16xlarge
+  r5.24xlarge
+  r5b.large
+  r5b.xlarge
+  r5b.2xlarge
+  r5b.4xlarge
+  r5b.8xlarge
+  r5b.12xlarge
+  r5b.16xlarge
+  r5b.24xlarge
+  c5.large
+  c5.xlarge
+  c5.2xlarge
+  c5.4xlarge
+  c5.8xlarge
+  c5.12xlarge
+  c5.16xlarge
+  c5.24xlarge
+  m5.large
+  m5.xlarge
+  m5.2xlarge
+  m5.4xlarge
+  m5.8xlarge
+  m5.12xlarge
+  m5.16xlarge
+  m5.24xlarge
+)
+
+function _toLower()
+{
+    echo "${1,,}"
+}
+
+function _toUpper()
+{
+    echo "${1^^}"
+}
+
+function _extract_instancetype_info()
+{
+    local instance_type=$(_toLower "$1")
+
+    # extract vcpu/vm_type/vm_family from the given instance_type
+    local vcpu=0
+    local vcpu_multiplier=4
+    local size=""
+    local class=""
+
+    # given "r5b.12xlarge", the regex pattern is (r5b).(12xlarge)
+    if [[ "${instance_type}" =~ ([a-z][0-9][a-z]*).([0-9]*[a-z]*large) ]]; then
+      class="${BASH_REMATCH[1]}"
+      size="${BASH_REMATCH[2]}"
+
+      case $size in
+        "large")
+        vcpu=2
+        ;;
+
+        "xlarge")
+        vcpu=4
+        ;;
+
+        *)
+        vcpu=$((${size//[^0-9]/}*vcpu_multiplier))
+        ;;
+      esac
+
+    else
+      suggest "Error: unsupported instance type: $1" alert
+      exit 1
+    fi
+
+    echo "$vcpu" "$instance_type" "$class" "$size"
+    return 0
+}
+
+# Default values for trial onboarding
+endpoint="public"
+instance_type="r5.large"
+ha=false
+activate=false
+onboard=false
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  key="$1"
+
+  case $key in
+    -i|--instance-type)
+      instance_type="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -e|--endpoint)
+      endpoint="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -a|--high-availability)
+      ha=true
+      shift # past argument
+      ;;
+    -r|--activate-region)
+      activate=true
+      shift # past argument
+      ;;
+    --onboard)
+      onboard=true
+      activate=true
+      shift # past argument
+      ;;
+    -h|--help)
+      show_help
+      exit 1
+      ;;
+    *)    # unknown option
+      POSITIONAL+=("$1") # save it in an array for later
+      shift # past argument
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+account=$1
+region=$2
+
+[ -z "$account" ] && show_help && exit 1
+# check that the aws cli is configured to work with the given account and we have access to
+set +e
+current_account=$(aws sts get-caller-identity --no-cli-pager --query 'Account' --output text)
+[ $? -ne 0 ] && suggest "Error while checking AWS credentials/profile configuration, please login/configure your AWS CLI session/profile" alert \
+    && show_help && exit 1
+set -e
+[[ ! "${current_account}" = "$account" ]] && suggest "Error: AWS CLI not configured to work with the requested account $account!" alert \
+    && suggest "The configured account ID is ${current_account}!" alert && show_help && exit 1
+
+[ -z "$region" ] && show_help && exit 1
+[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
+    && suggest "Error: unsupported region - ${region}" alert \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_INSTANCETYPE[@]}" =~ "${instance_type}" ]] \
+    && suggest "Error: unsupported Postgres instance type - ${instance_type}" alert \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] \
+    && suggest "Error: invalid endpoint flavor - ${endpoint}" alert \
+    && show_help \
+    && exit 1
+
+# extract postgres workload used VM instance type info
+instance_type_info=($(_extract_instancetype_info "$instance_type"))
+pg_vm_vcpu=${instance_type_info[0]}
+pg_vm_type=${instance_type_info[1]}
+pg_vm_class_size="${instance_type_info[2]}.${instance_type_info[3]}"
+[[ "${pg_vm_class_size}" = "" ]] \
+    && suggest "Error: unsupported Postgres instance type" alert \
+    && show_help \
+    && exit 1
+
+# hardcode management workload used VM instance type info
+mgmt_vm_vcpu=2
+mgmt_vm_instances=3
+mgmt_vm_type="m5.large"
+mgmt_nat_gateways=3
+
+function infra_vcpus()
+{
+    [ "$activate" = "true" ] && echo $((mgmt_vm_vcpu*mgmt_vm_instances)) || echo 0
+}
+
+function need_public_ip()
+{
+    [ "$activate" = "true" ] && echo $mgmt_nat_gateways || echo 0
+}
+
+function need_vpc()
+{
+    [ "$activate" = "true" ] && echo 1 || echo 0
+}
+
+function need_pg_vcpus_for()
+{
+    local vcpu=$1
+    local ha=$2
+    local replica=1
+    [ "$ha" = "true" ] && replica=3
+
+    echo $((vcpu*replica))
+}
+
+# call aws-cli for usages of VMs and Network resources
+TMPDIR=$(mktemp -d)
+
+function _onexit {
+  #### Print Final Suggestions Result
+  echo ""
+  echo "#######################"
+  echo "# Overall Suggestions #"
+  echo "#######################"
+  echo ""
+  echo -e "$(cat "$TMP_SUGGESTION")"
+
+  echo ""
+  echo "Please open a ticket to AWS if need to raise service quota limits."
+  echo "Open https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html for more info."
+  echo "Default service quota limits can be found here https://docs.aws.amazon.com/general/latest/gr/aws-general.pdf#aws-service-information."
+  echo -e "You can also run ${GREEN}aws support create-case help${NC} for more examples."
+
+  rm -rf "${TMPDIR}"
+}
+trap _onexit EXIT
+pushd "${TMPDIR}" > /dev/null 2>&1 || exit
+
+TMP_SUGGESTION=$TMPDIR/suggestions_$$
+touch "$TMP_SUGGESTION"
+
+function store_suggestion()
+{
+    echo "$1" >> "$TMP_SUGGESTION"
+}
+
+#### Check AWS CLI version
+function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+function check_aws_version {
+  fullcliversion=$(aws --version)
+  cliversionstripped=${fullcliversion% Python*}
+  cliversion=${cliversionstripped#*/}
+  if [ "$AWS_EXECUTION_ENV" == "CloudShell" ]; then
+    suggest "Run AWS Preflight Checks with aws-cli ${cliversion} in AWS CloudShell" ok
+  else
+    [ "$(version "$cliversion")" -lt "$(version "2.3.0")" ] && suggest "error: upgrade aws-cli to 2.3.0 or later" alert && exit 1
+    suggest "Run AWS Preflight Checks with aws-cli ${cliversion}" ok
+  fi
+}
+check_aws_version
+
+function validate_account() {
+  # TODO
+  # check if AWS CLI has something to verify if an AWS Account is suspended
+  # was looking at aws organizations describe-account --account-id XXXX
+  # but I can't execute that without enough rights on the management account
+  store_suggestion "Make sure the AWS Account ID ${GREEN}$1${NC} is the one that you want to use for BigAnimal"
+}
+
+#### AWS User Role Assignment Checking
+function validate_role_assignment() {
+  # TODO
+  # check if AWS CLI has something to verify the IAM permissions assigned to the
+  # user/role/token that is being used to make the AWS API calls
+  # was looking at
+  # aws iam list-user-policies
+  # aws iam list-attached-user-policies
+  # aws iam list-groups-for-user
+  # For each group: aws iam list-group-policies and aws iam list-attached-group-policies
+  # For roles: aws iam list-role-policies and aws iam list-attached-role-policies
+  # but maybe this not make really sense because you need to have also IAM rights
+  # to query for IAM itself like GetUser, GetRole, GetPolicy that are not really
+  # needed to be able to use CreateRole, AttachRolePolicy, PutRolePermissionsBoundary,
+  # CreatePolicy, CreatePolicyVersion, UpdateAssumeRolePolicy
+  store_suggestion "Make sure the AWS credentials used ${GREEN}$1${NC} has rights to create IAM Roles and Policies"
+}
+
+function check_onboard() {
+  #### AWS User and Account Checking
+  current_aws_user=$(aws sts get-caller-identity --no-cli-pager --query 'UserId' --output text)
+  validate_account "$account"
+  validate_role_assignment "$current_aws_user"
+}
+
+[ "$onboard" = "true" ] && check_onboard
+
+echo ""
+echo "##############################################"
+echo -e "Checking Service Quotas Limits on ${GREEN}$region${NC}..."
+echo "##############################################"
+echo ""
+# getting resources current usage
+start_time=$(date -d "3 hours ago" '+%Y-%m-%dT%H:%M:%S')
+end_time=$(date '+%Y-%m-%dT%H:%M:%S')
+cpu_usage=$(aws cloudwatch get-metric-statistics --namespace "AWS/Usage" --metric-name "ResourceCount" \
+  --dimensions Name=Class,Value=Standard/OnDemand Name=Resource,Value=vCPU Name=Service,Value=EC2 Name=Type,Value=Resource \
+  --statistics Maximum --region "$region" --period 3600 --start-time "$start_time" --end-time "$end_time" \
+  --query 'Datapoints[0].Maximum')
+[[ "${cpu_usage}" = "null" ]] && cpu_usage=0
+eip_usage=$(aws ec2 describe-addresses --query 'length(Addresses)' --region "$region")
+vpc_usage=$(aws ec2 describe-vpcs --query 'length(Vpcs)' --region "$region")
+nlb_usage=$(aws cloudwatch get-metric-statistics --namespace "AWS/Usage" --metric-name "ResourceCount" \
+  --dimensions Name=Class,Value=None Name=Resource,Value=NetworkLoadBalancersPerRegion \
+  Name=Service,Value="Elastic Load Balancing" Name=Type,Value=Resource \
+  --statistics Maximum --region "$region" --period 3600 --start-time "$start_time" --end-time "$end_time" \
+  --query 'Datapoints[0].Maximum')
+[[ "${nlb_usage}" = "null" ]] && nlb_usage=0
+
+# getting service quota limits
+cpu_quota_code=( "L-1216C47A" "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" )
+cpu_quota=$(aws service-quotas get-service-quota --region "$region" --service-code ec2 --quota-code "${cpu_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+eip_quota_code=( "L-0263D0A3" "EC2-VPC Elastic IPs" )
+eip_quota=$(aws service-quotas get-service-quota --region "$region" --service-code ec2 --quota-code "${eip_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+vpc_quota_code=( "L-F678F1CE" "VPCs per Region" )
+vpc_quota=$(aws service-quotas get-service-quota --region "$region" --service-code vpc --quota-code "${vpc_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+nlb_quota_code=( "L-69A177A2" "Network Load Balancers per Region" )
+nlb_quota=$(aws service-quotas get-service-quota --region "$region" --service-code elasticloadbalancing --quota-code "${nlb_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+
+# calculate required resources
+need_mgmt_vcpus=$(infra_vcpus)
+need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$ha")
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus))
+need_eip=$(need_public_ip)
+need_vpc=$(need_vpc)
+need_nlb=1
+
+# calculate gap of "quota - used - need" (that corresponds to "available - need")
+gap_regional_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_regional_vcpus))
+gap_eip=$((${eip_quota%.*} - ${eip_usage%.*} - need_eip))
+gap_vpc=$((${vpc_quota%.*} - ${vpc_usage%.*} - need_vpc))
+gap_nlb=$((${nlb_quota%.*} - ${nlb_usage%.*} - need_nlb))
+
+function quota_suggest()
+{
+    local gap=$1
+    local resource=$2
+    if [ "$gap" -le 0 ]; then
+        store_suggestion "Resource '${GREEN}$resource${NC}' quota in '${GREEN}$region${NC}' has a gap of '${RED}$gap${NC}'"
+        suggest "Increase Quota" alert
+    else
+        suggest "OK" ok
+    fi
+}
+
+# print region resources service quota limits checking result
+FMT="%-21s %-37s %-8s %-8s %-11s %-8s %-11b\n"
+printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestion"
+printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
+printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "$mgmt_vm_type vCPUs")"
+printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "$pg_vm_type vCPUs")"
+printf "$FMT" "Elastic IP Addresses" "${eip_quota_code[1]}" ${eip_quota%.*} ${eip_usage} ${need_eip} ${gap_eip} "$(quota_suggest $gap_eip "EC2-VPC Elastic IPs")"
+printf "$FMT" "VPCs" "${vpc_quota_code[1]}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "VPCs per Region")"
+printf "$FMT" "NLBs" "${nlb_quota_code[1]}" ${nlb_quota%.*} ${nlb_usage%.*} ${need_nlb} ${gap_nlb} "$(quota_suggest $gap_nlb "Network Load Balancers per Region")"
+
+# exporting JSON report of needed service quota increases
+declare -A suggested_quota_increases
+ba_preflight=""
+[ "${gap_regional_vcpus}" -lt 0 ] && suggested_quota_increases[${cpu_quota_code[0]}]=$((${cpu_quota%.*}+gap_regional_vcpus*-1))
+[ "${gap_eip}" -lt 0 ] && suggested_quota_increases[${eip_quota_code[0]}]=$((${eip_quota%.*}+gap_eip*-1))
+[ "${gap_vpc}" -lt 0 ] && suggested_quota_increases[${vpc_quota_code[0]}]=$((${vpc_quota%.*}+gap_vpc*-1))
+[ "${gap_nlb}" -lt 0 ] && suggested_quota_increases[${nlb_quota_code[0]}]=$((${nlb_quota%.*}+gap_nlb*-1))
+for i in "${!suggested_quota_increases[@]}"; do
+    ba_preflight="${ba_preflight}\"$i\":\"${suggested_quota_increases[$i]}\","
+done
+[ -n "$ba_preflight" ] && echo "{${ba_preflight::-1}}" > "$CURRENT_PATH"/ba-preflight.json
+
+# JSON is exported to make use of
+# aws service-quotas request-service-quota-increase --service-code SERVICE_CODE \
+#   --quota-code QUOTA_CODE --desired-value NEW_QUOTA_LIMIT
+# during the execution of the following create-credentials.sh if the appropriate flag will be specified

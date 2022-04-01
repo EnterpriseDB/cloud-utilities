@@ -2,15 +2,16 @@
 
 This repository contains utilities and scripts to help on using [BigAnimal][1]
 
-## Requirement
+## Requirements
 
 The below software utilities are required to be installed on the machine
 where the scripts provided in this repository are used:
 
 - [jq][3]
-- [azure cli][4] v2.26 or above
+- [azure cli][4] v2.26 or above (if runs against Azure)
+- [aws-cli][6] v.2.3.0 or above (if runs against AWS)
 
-## Scripts
+## Azure Scripts
 
 ### Check Azure subscription readiness for running BigAnimal
 
@@ -37,8 +38,22 @@ For more details about BigAnimal API, please refer to [Using the BigAnimal API][
 [create-spn.sh](./azure/create-spn.sh) is a script used to create a SPN with enough
 permissions. The output can be used in BigAnimal Signup page.
 
+## AWS Scripts
+
+### Check AWS account readiness for running BigAnimal
+
+[biganimal-preflight-aws](./aws/biganimal-preflight-aws) is a script used to check the
+AWS account readiness for running the BigAnimal by checking:
+
+- if the AWS CLI is correctly configured
+- if the AWS service quota in your AWS account can meet the requirement of BigAnimal
+
+It calls to AWS CLI and queries some specific resource types and check if there is
+still available resources can be allocated for the dedicated use by BigAnimal.
+
 [1]: https://www.enterprisedb.com/docs/biganimal/latest/
 [2]: https://portal.biganimal.com/api/docs/
 [3]: https://stedolan.github.io/jq/
 [4]: https://docs.microsoft.com/en-us/cli/azure/
 [5]: https://www.enterprisedb.com/docs/biganimal/latest/reference
+[6]: https://aws.amazon.com/cli/

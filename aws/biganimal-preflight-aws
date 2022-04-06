@@ -42,12 +42,12 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
-[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo -e "${RED}This script does not support Bash version 3 and below${NC}"
+[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo -e "${RED}This script does not support Bash version 3 and below!${NC}" && show_help && exit 1
 CURRENT_PATH=$(pwd)
 
 function show_help()
 {
-    echo -e "Usage: ${GREEN}biganimal-preflight-aws [options] <account-id> <region>${NC}"
+    echo -e "Usage: ${GREEN}$0 [options] <account-id> <region>${NC}"
     echo ""
     echo "Arguments:"
     echo "    <account-id>             AWS account ID for BigAnimal deployment"
@@ -64,8 +64,8 @@ function show_help()
     echo "Behavior defaults to --onboard if no other options provided."
     echo
     echo "Examples:"
-    echo "    biganimal-preflight-aws --onboard 123456789012 us-east-1"
-    echo "    biganimal-preflight-aws -i r5.2xlarge --high-availability -e private -r 123456789012 us-east-1"
+    echo "    $0 --onboard 123456789012 us-east-1"
+    echo "    $0 -i r5.2xlarge --high-availability -e private -r 123456789012 us-east-1"
     echo
     echo "Available regions are: "
     echo -e "  ${GREEN}${AVAILABLE_REGIONS[@]}${NC}"
@@ -92,6 +92,7 @@ AVAILABLE_ENDPOINTS=(
   private
 )
 
+# us-west-1 has not been included because it provides only 2 AZs by default
 AVAILABLE_REGIONS=(
   eu-north-1
   ap-south-1
@@ -108,7 +109,6 @@ AVAILABLE_REGIONS=(
   eu-central-1
   us-east-1
   us-east-2
-  us-west-1
   us-west-2
 )
 
@@ -133,9 +133,9 @@ AVAILABLE_INSTANCETYPE=(
   c5.xlarge
   c5.2xlarge
   c5.4xlarge
-  c5.8xlarge
+  c5.9xlarge
   c5.12xlarge
-  c5.16xlarge
+  c5.18xlarge
   c5.24xlarge
   m5.large
   m5.xlarge
@@ -145,6 +145,33 @@ AVAILABLE_INSTANCETYPE=(
   m5.12xlarge
   m5.16xlarge
   m5.24xlarge
+  r6i.large
+  r6i.xlarge
+  r6i.2xlarge
+  r6i.4xlarge
+  r6i.8xlarge
+  r6i.12xlarge
+  r6i.16xlarge
+  r6i.24xlarge
+  r6i.32xlarge
+  c6i.large
+  c6i.xlarge
+  c6i.2xlarge
+  c6i.4xlarge
+  c6i.8xlarge
+  c6i.12xlarge
+  c6i.16xlarge
+  c6i.24xlarge
+  c6i.32xlarge
+  m6i.large
+  m6i.xlarge
+  m6i.2xlarge
+  m6i.4xlarge
+  m6i.8xlarge
+  m6i.12xlarge
+  m6i.16xlarge
+  m6i.24xlarge
+  m6i.32xlarge
 )
 
 function _toLower()
@@ -246,7 +273,7 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 account=$1
 region=$2
 
-[ -z "$account" ] && show_help && exit 1
+[ -z "$account" ] && suggest "<account-id> is a required option!" alert && show_help && exit 1
 # check that the aws cli is configured to work with the given account and we have access to
 set +e
 current_account=$(aws sts get-caller-identity --no-cli-pager --query 'Account' --output text)
@@ -283,7 +310,7 @@ pg_vm_class_size="${instance_type_info[2]}.${instance_type_info[3]}"
 # hardcode management workload used VM instance type info
 mgmt_vm_vcpu=2
 mgmt_vm_instances=3
-mgmt_vm_type="m5.large"
+mgmt_vm_type="m5(a).large"
 mgmt_nat_gateways=3
 
 function infra_vcpus()
@@ -298,7 +325,7 @@ function need_public_ip()
 
 function need_vpc()
 {
-    [ "$activate" = "true" ] && echo 1 || echo 0
+    [ "$activate" = "true" ] && echo 2 || echo 0
 }
 
 function need_pg_vcpus_for()
@@ -327,7 +354,7 @@ function _onexit {
   echo "Please open a ticket to AWS if need to raise service quota limits."
   echo "Open https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html for more info."
   echo "Default service quota limits can be found here https://docs.aws.amazon.com/general/latest/gr/aws-general.pdf#aws-service-information."
-  echo -e "You can also run ${GREEN}aws support create-case help${NC} for more examples."
+  echo -e "You can also run ${GREEN}aws support create-case help${NC} or ${GREEN}aws service-quotas request-service-quota-increase help${NC} for more examples."
 
   rm -rf "${TMPDIR}"
 }
@@ -398,7 +425,12 @@ echo -e "Checking Service Quotas Limits on ${GREEN}$region${NC}..."
 echo "##############################################"
 echo ""
 # getting resources current usage
-start_time=$(date -d "3 hours ago" '+%Y-%m-%dT%H:%M:%S')
+# on MacOS using full path so this script works also with GNU core utilities installed (coreutils)
+if [[ $OSTYPE == 'darwin'* ]]; then
+  start_time=$(/bin/date -j -v-3H '+%Y-%m-%dT%H:%M:%S')
+else
+  start_time=$(date -d "3 hours ago" '+%Y-%m-%dT%H:%M:%S')
+fi
 end_time=$(date '+%Y-%m-%dT%H:%M:%S')
 cpu_usage=$(aws cloudwatch get-metric-statistics --namespace "AWS/Usage" --metric-name "ResourceCount" \
   --dimensions Name=Class,Value=Standard/OnDemand Name=Resource,Value=vCPU Name=Service,Value=EC2 Name=Type,Value=Resource \
@@ -442,9 +474,10 @@ function quota_suggest()
 {
     local gap=$1
     local resource=$2
+    local quota=$3
     if [ "$gap" -le 0 ]; then
-        store_suggestion "Resource '${GREEN}$resource${NC}' quota in '${GREEN}$region${NC}' has a gap of '${RED}$gap${NC}'"
-        suggest "Increase Quota" alert
+        store_suggestion "Resource '${GREEN}$resource${NC}' quota in '${GREEN}$region${NC}' needs to be increased to '${RED}$((quota-gap))${NC}'"
+        suggest "Increase Quota by ${gap:1}" alert
     else
         suggest "OK" ok
     fi
@@ -454,11 +487,13 @@ function quota_suggest()
 FMT="%-21s %-37s %-8s %-8s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
-printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "$mgmt_vm_type vCPUs")"
-printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "$pg_vm_type vCPUs")"
-printf "$FMT" "Elastic IP Addresses" "${eip_quota_code[1]}" ${eip_quota%.*} ${eip_usage} ${need_eip} ${gap_eip} "$(quota_suggest $gap_eip "EC2-VPC Elastic IPs")"
-printf "$FMT" "VPCs" "${vpc_quota_code[1]}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "VPCs per Region")"
-printf "$FMT" "NLBs" "${nlb_quota_code[1]}" ${nlb_quota%.*} ${nlb_usage%.*} ${need_nlb} ${gap_nlb} "$(quota_suggest $gap_nlb "Network Load Balancers per Region")"
+printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code[1]%(*}instances" "${cpu_quota%.*}")"
+printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code[1]%(*}instances" "${cpu_quota%.*}")"
+printf "$FMT" "Elastic IP Addresses" "${eip_quota_code[1]}" ${eip_quota%.*} ${eip_usage} ${need_eip} ${gap_eip} "$(quota_suggest $gap_eip "${eip_quota_code[1]}" "${eip_quota%.*}")"
+printf "$FMT" "VPCs" "${vpc_quota_code[1]}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code[1]}" "${vpc_quota%.*}")"
+printf "$FMT" "NLBs" "${nlb_quota_code[1]}" ${nlb_quota%.*} ${nlb_usage%.*} ${need_nlb} ${gap_nlb} "$(quota_suggest $gap_nlb "${nlb_quota_code[1]}" "${nlb_quota%.*}")"
+echo ""
+echo "Note: the first two Instance Types are referring to the same AWS Service Quota."
 
 # exporting JSON report of needed service quota increases
 declare -A suggested_quota_increases
@@ -475,4 +510,4 @@ done
 # JSON is exported to make use of
 # aws service-quotas request-service-quota-increase --service-code SERVICE_CODE \
 #   --quota-code QUOTA_CODE --desired-value NEW_QUOTA_LIMIT
-# during the execution of the following create-credentials.sh if the appropriate flag will be specified
+# during the execution of the following create-policy-and-role.sh if the appropriate flag will be specified

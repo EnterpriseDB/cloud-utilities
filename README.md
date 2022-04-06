@@ -48,8 +48,19 @@ AWS account readiness for running the BigAnimal by checking:
 - if the AWS CLI is correctly configured
 - if the AWS service quota in your AWS account can meet the requirement of BigAnimal
 
-It calls to AWS CLI and queries some specific resource types and check if there is
-still available resources can be allocated for the dedicated use by BigAnimal.
+It uses the AWS CLI and queries for some specific resource types checking if there are
+available resources that can be allocated for the usage requirement of BigAnimal.
+
+### Create an AWS IAM policy and role for BigAnimal Cloud Account Connect
+
+[create-policy-and-role.sh](./aws/create-policy-and-rolesh) is a script used to create an
+IAM policy and an IAM role with enough permissions. The script will create a "ba-passport.json"
+file that can be used by the [BigAnimal CLI][7] to connect your AWS account with your BigAnimal
+account.
+You can find an easy readable version of both the IAM policy and the IAM Trust Policy applied
+to the created IAM role here:
+[biganimal_AWS_basepolicy.json](./aws/biganimal_AWS_basepolicy.json)
+[biganimal_AWS_trustpolicy](./aws/biganimal_AWS_trustpolicy.json)
 
 [1]: https://www.enterprisedb.com/docs/biganimal/latest/
 [2]: https://portal.biganimal.com/api/docs/
@@ -57,3 +68,4 @@ still available resources can be allocated for the dedicated use by BigAnimal.
 [4]: https://docs.microsoft.com/en-us/cli/azure/
 [5]: https://www.enterprisedb.com/docs/biganimal/latest/reference
 [6]: https://aws.amazon.com/cli/
+[7]: https://www.enterprisedb.com/docs/biganimal/latest/reference/cli/

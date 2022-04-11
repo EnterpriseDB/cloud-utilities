@@ -3,6 +3,7 @@
     "Statement": [
         {
             "Action": [
+                "dynamodb:CreateTable",
                 "dynamodb:DeleteItem",
                 "dynamodb:DescribeContinuousBackups",
                 "dynamodb:DescribeTable",
@@ -50,8 +51,11 @@
                 "ec2:RevokeSecurityGroupIngress",
                 "ec2:SearchLocalGatewayRoutes",
                 "ec2:SearchTransitGatewayRoutes",
+                "ecs:CreateCluster",
                 "ecs:Describe*",
                 "ecs:List*",
+                "ecs:RegisterTaskDefinition",
+                "ecs:RunTask",
                 "eks:CreateAddon",
                 "eks:CreateCluster",
                 "eks:CreateNodegroup",
@@ -109,15 +113,19 @@
                 "iam:TagRole",
                 "iam:UntagOpenIDConnectProvider",
                 "iam:UpdateRole",
+                "kms:CreateAlias",
                 "kms:CreateGrant",
                 "kms:CreateKey",
+                "kms:DeleteAlias",
                 "kms:DescribeKey",
                 "kms:EnableKeyRotation",
                 "kms:GetKeyPolicy",
                 "kms:GetKeyRotationStatus",
+                "kms:ListAliases",
                 "kms:ListResourceTags",
                 "kms:ScheduleKeyDeletion",
                 "kms:TagResource",
+                "kms:UpdateAlias",
                 "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:DeleteLogGroup",
@@ -150,8 +158,29 @@
         },
         {
             "Action": [
-                "secretsmanager:*"
+                "ssm:AddTagsToResource",
+                "ssm:GetParameters",
+                "ssm:PutParameter"
             ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:ssm:*:*:parameter/BA_*",
+            "Sid": "BigAnimalSystemsManagerParameterStorePolicy"
+        },
+        {
+            "Action": [
+                "iam:PassRole",
+                "logs:FilterLogEvents"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:iam::*:role/ba-aA1bB2cC3dD4eE5f-*",
+                "arn:aws:iam::*:role/biganimal-role",
+                "arn:aws:logs:*:*:log-group:/ecs/ba-bootstrap:log-stream:"
+            ],
+            "Sid": "BigAnimalECSTaskPolicy"
+        },
+        {
+            "Action": "secretsmanager:*",
             "Effect": "Allow",
             "Resource": "arn:aws:secretsmanager:*:*:secret:BA*",
             "Sid": "BigAnimalSecretsPolicy"

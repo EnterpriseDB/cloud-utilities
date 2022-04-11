@@ -42,7 +42,7 @@ permissions. The output can be used in BigAnimal Signup page.
 
 ### Check AWS account readiness for running BigAnimal
 
-[biganimal-preflight-aws](./aws/biganimal-preflight-aws) is a script used to check the
+[biganimal-csp-preflight](./aws/biganimal-csp-preflight) is a script used to check the
 AWS account readiness for running the BigAnimal by checking:
 
 - if the AWS CLI is correctly configured
@@ -53,12 +53,12 @@ available resources that can be allocated for the usage requirement of BigAnimal
 
 ### Create an AWS IAM policy and role for BigAnimal Cloud Account Connect
 
-[create-policy-and-role.sh](./aws/create-policy-and-rolesh) is a script used to create an
+[biganimal-csp-setup](./aws/biganimal-csp-setup) is a script used to create an
 IAM policy and an IAM role with enough permissions. The script will create a "ba-passport.json"
 file that can be used by the [BigAnimal CLI][7] to connect your AWS account with your BigAnimal
 account.
-You can find an easy readable version of both the IAM policy and the IAM Trust Policy applied
-to the created IAM role here:
+You can find an easy readable version (pretty print) of both the IAM policy and the
+IAM Trust Policy applied to the created IAM role here:
 [biganimal_AWS_basepolicy.json](./aws/biganimal_AWS_basepolicy.json)
 [biganimal_AWS_trustpolicy](./aws/biganimal_AWS_trustpolicy.json)
 

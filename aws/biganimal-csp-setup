@@ -45,8 +45,8 @@ NC='\033[0m'
 CURRENT_PATH=$(pwd)
 
 # Default values for resources naming
-policy_name="biganimal-policy"
-role_name="biganimal-role"
+suffix_policy_name="policy"
+suffix_role_name="role"
 account=""
 biganimal_account_id=""
 external_id=""
@@ -55,6 +55,8 @@ increase_quota=false
 declare -A quota_increases
 aws_used_service_quota_codes=("ec2" "vpc" "elasticloadbalancing")
 declare -A quota_names
+policy_arn=""
+role_arn=""
 
 TMPDIR=$(mktemp -d)
 function cleanup {
@@ -76,18 +78,20 @@ show_help()
   echo -e "  ${GREEN}$0 -a ACCOUNT_ID -b BIGANIMAL_ACCOUNT_ID -e EXTERNAL_ID [options]${NC}"
   echo ""
   echo "Options:"
-  echo "  -a, --account:           Your AWS account ID that will be used by BigAnimal."
-  echo "  -b, --biganimal-account: The AWS account ID provided by BigAnimal (should be a 12 chars numeric string)."
-  echo "  -e, --external-id:       The AWS external ID provided by BigAnimal (should be a 16 chars alphanumeric string)."
-  echo "  -p, --policy-name:       The name of the IAM policy (defaults to 'biganimal-policy')."
-  echo "  -r, --role-name:         The name of the IAM role (defaults to 'biganimal-role')."
-  echo "  -q, --increase-quotas:   Create tickets to request Service Quota increases if needed (defaults to false)."
-  echo "  -g, --region:            The name of the AWS region in which ask for service quota increases (defaults to your AWS CLI profile)"
-  echo "  -h, --help:              Show this help."
+  echo "  -a, --account:            Your AWS account ID that will be used by BigAnimal."
+  echo "  -b, --biganimal-account:  The AWS account ID provided by BigAnimal (should be a 12 chars numeric string)."
+  echo "  -e, --external-id:        The AWS external ID provided by BigAnimal (should be a 16 chars alphanumeric string)."
+  echo "  -p, --policy-name-suffix: The suffix part in the name of the IAM policy (defaults policy name is 'biganimal-policy')."
+  echo "  -r, --role-name-suffix:   The suffix part in the name of the IAM role (defaults role name is 'biganimal-role')."
+  echo "  -q, --increase-quotas:    Create tickets to request Service Quota increases if needed (defaults to false)."
+  echo "  -g, --region:             The name of the AWS region in which ask for service quota increases (defaults to your AWS CLI profile)"
+  echo "  -h, --help:               Show this help."
   echo ""
   echo "Examples:"
   echo "    $0 -a 123456789012 -b 987654321098 -e aA1bB2cC3dD4eE5f"
-  echo "    $0 -a 123456789012 -b 987654321098 -e aA1bB2cC3dD4eE5f -p \"my_policy_name\" -r \"my_role_name\" -q"
+  echo "    $0 -a 123456789012 -b 987654321098 -e aA1bB2cC3dD4eE5f -p \"my_policy_suffix\" -r \"my_role_suffix\" -q"
+  echo "    this will create a policy named 'biganimal-my_policy_suffix' and a role named 'biganimal-my_role_suffix'"
+  echo ""
 }
 
 check()
@@ -110,10 +114,10 @@ check_aws_version()
   cliversionstripped=${fullcliversion% Python*}
   cliversion=${cliversionstripped#*/}
   if [[ "$AWS_EXECUTION_ENV" == "CloudShell" ]]; then
-    echo -e "${GREEN}Run AWS create-policy-and-role with aws-cli ${cliversion} in AWS CloudShell${NC}"
+    echo -e "${GREEN}Run AWS CSP setup with aws-cli ${cliversion} in AWS CloudShell${NC}"
   else
     [ "$(version "$cliversion")" -lt "$(version "2.3.0")" ] && echo -e "${RED}Error: upgrade aws-cli to 2.3.0 or later${NC}" && exit 1
-    echo -e "${GREEN}Run AWS create-policy-and-role with aws-cli ${cliversion}${NC}"
+    echo -e "${GREEN}Run AWS CSP setup with aws-cli ${cliversion}${NC}"
   fi
 }
 
@@ -209,11 +213,11 @@ while [[ $# -gt 0 ]]; do
       external_id="$2"
       shift 2
       ;;
-    -p|--policy-name)
+    -p|--policy-name-suffix)
       policy_name="$2"
       shift 2
       ;;
-    -r|--role-name)
+    -r|--role-name-suffix)
       role_name="$2"
       shift 2
       ;;
@@ -235,30 +239,36 @@ create_iam_policy()
 {
   # IAM Policy
   biganimal_policy=$(cat <<EOF
-{"Version":"2012-10-17","Statement":[{"Action":["dynamodb:DeleteItem","dynamodb:DescribeContinuousBackups","dynamodb:DescribeTable","dynamodb:GetItem","dynamodb:PutItem","ec2:AllocateAddress","ec2:AssociateRouteTable","ec2:AttachInternetGateway","ec2:AuthorizeSecurityGroupEgress","ec2:AuthorizeSecurityGroupIngress","ec2:CreateEgressOnlyInternetGateway","ec2:CreateInternetGateway","ec2:CreateNatGateway","ec2:CreateNetworkAcl","ec2:CreateNetworkAclEntry","ec2:CreateRoute","ec2:CreateRouteTable","ec2:CreateSecurityGroup","ec2:CreateSubnet","ec2:CreateTags","ec2:CreateVpc","ec2:CreateVpcEndpoint","ec2:DeleteEgressOnlyInternetGateway","ec2:DeleteInternetGateway","ec2:DeleteNatGateway","ec2:DeleteNetworkAcl","ec2:DeleteNetworkAclEntry","ec2:DeleteRoute","ec2:DeleteRouteTable","ec2:DeleteSecurityGroup","ec2:DeleteSubnet","ec2:DeleteVpc","ec2:DeleteVpcEndpoints","ec2:Describe*","ec2:DetachInternetGateway","ec2:DisassociateRouteTable","ec2:Get*","ec2:ListSnapshotsInRecycleBin","ec2:ModifySubnetAttribute","ec2:ModifyVpcAttribute","ec2:ReleaseAddress","ec2:ReplaceNetworkAclAssociation","ec2:ReplaceRoute","ec2:RevokeSecurityGroupEgress","ec2:RevokeSecurityGroupIngress","ec2:SearchLocalGatewayRoutes","ec2:SearchTransitGatewayRoutes","ecs:Describe*","ecs:List*","eks:CreateAddon","eks:CreateCluster","eks:CreateNodegroup","eks:DeleteAddon","eks:DeleteCluster","eks:DeleteNodegroup","eks:Describe*","eks:List*","eks:TagResource","eks:UntagResource","eks:UpdateAddon","eks:UpdateNodegroupConfig","iam:AttachRolePolicy","iam:CreateOpenIDConnectProvider","iam:CreatePolicy","iam:CreateRole","iam:DeleteOpenIDConnectProvider","iam:DeletePolicy","iam:DeleteRole","iam:DeleteRolePolicy","iam:DetachRolePolicy","iam:GetAccountSummary","iam:GetOpenIDConnectProvider","iam:GetPolicy","iam:GetPolicyVersion","iam:GetRole","iam:GetRolePolicy","iam:ListAccessKeys","iam:ListAttachedRolePolicies","iam:ListEntitiesForPolicy","iam:ListInstanceProfilesForRole","iam:ListInstanceProfileTags","iam:ListMFADevices","iam:ListMFADeviceTags","iam:ListOpenIDConnectProviders","iam:ListOpenIDConnectProviderTags","iam:ListPolicies","iam:ListPoliciesGrantingServiceAccess","iam:ListPolicyTags","iam:ListPolicyVersions","iam:ListRolePolicies","iam:ListRoles","iam:ListRoleTags","iam:ListSAMLProviders","iam:ListSAMLProviderTags","iam:ListServerCertificates","iam:ListServerCertificateTags","iam:ListServiceSpecificCredentials","iam:ListSigningCertificates","iam:ListSSHPublicKeys","iam:ListVirtualMFADevices","iam:PutRolePolicy","iam:TagOpenIDConnectProvider","iam:TagPolicy","iam:TagRole","iam:UntagOpenIDConnectProvider","iam:UpdateRole","kms:CreateGrant","kms:CreateKey","kms:DescribeKey","kms:EnableKeyRotation","kms:GetKeyPolicy","kms:GetKeyRotationStatus","kms:ListResourceTags","kms:ScheduleKeyDeletion","kms:TagResource","logs:CreateLogGroup","logs:CreateLogStream","logs:DeleteLogGroup","logs:DescribeLogGroups","logs:GetLogGroupFields","logs:ListTagsLogGroup","logs:PutLogEvents","logs:PutRetentionPolicy","logs:TagLogGroup","logs:UntagLogGroup","s3:CreateBucket","s3:DeleteBucket","s3:DeleteBucketPolicy","s3:DeleteObject","s3:DescribeJob","s3:Get*","s3:List*","s3:PutBucketOwnershipControls","s3:PutBucketPolicy","s3:PutBucketPublicAccessBlock","s3:PutBucketTagging","s3:PutBucketVersioning","s3:PutEncryptionConfiguration","s3:PutObject","sts:DecodeAuthorizationMessage"],"Effect":"Allow","Resource":"*","Sid":"BigAnimalBasePolicy"},{"Action":["secretsmanager:*"],"Effect":"Allow","Resource":"arn:aws:secretsmanager:*:*:secret:BA*","Sid":"BigAnimalSecretsPolicy"}]}
+{"Version":"2012-10-17","Statement":[{"Action":["dynamodb:CreateTable","dynamodb:DeleteItem","dynamodb:DescribeContinuousBackups","dynamodb:DescribeTable","dynamodb:GetItem","dynamodb:PutItem","ec2:AllocateAddress","ec2:AssociateRouteTable","ec2:AttachInternetGateway","ec2:AuthorizeSecurityGroupEgress","ec2:AuthorizeSecurityGroupIngress","ec2:CreateEgressOnlyInternetGateway","ec2:CreateInternetGateway","ec2:CreateNatGateway","ec2:CreateNetworkAcl","ec2:CreateNetworkAclEntry","ec2:CreateRoute","ec2:CreateRouteTable","ec2:CreateSecurityGroup","ec2:CreateSubnet","ec2:CreateTags","ec2:CreateVpc","ec2:CreateVpcEndpoint","ec2:DeleteEgressOnlyInternetGateway","ec2:DeleteInternetGateway","ec2:DeleteNatGateway","ec2:DeleteNetworkAcl","ec2:DeleteNetworkAclEntry","ec2:DeleteRoute","ec2:DeleteRouteTable","ec2:DeleteSecurityGroup","ec2:DeleteSubnet","ec2:DeleteVpc","ec2:DeleteVpcEndpoints","ec2:Describe*","ec2:DetachInternetGateway","ec2:DisassociateRouteTable","ec2:Get*","ec2:ListSnapshotsInRecycleBin","ec2:ModifySubnetAttribute","ec2:ModifyVpcAttribute","ec2:ReleaseAddress","ec2:ReplaceNetworkAclAssociation","ec2:ReplaceRoute","ec2:RevokeSecurityGroupEgress","ec2:RevokeSecurityGroupIngress","ec2:SearchLocalGatewayRoutes","ec2:SearchTransitGatewayRoutes","ecs:CreateCluster","ecs:Describe*","ecs:List*","ecs:RegisterTaskDefinition","ecs:RunTask","eks:CreateAddon","eks:CreateCluster","eks:CreateNodegroup","eks:DeleteAddon","eks:DeleteCluster","eks:DeleteNodegroup","eks:Describe*","eks:List*","eks:TagResource","eks:UntagResource","eks:UpdateAddon","eks:UpdateNodegroupConfig","iam:AttachRolePolicy","iam:CreateOpenIDConnectProvider","iam:CreatePolicy","iam:CreateRole","iam:DeleteOpenIDConnectProvider","iam:DeletePolicy","iam:DeleteRole","iam:DeleteRolePolicy","iam:DetachRolePolicy","iam:GetAccountSummary","iam:GetOpenIDConnectProvider","iam:GetPolicy","iam:GetPolicyVersion","iam:GetRole","iam:GetRolePolicy","iam:ListAccessKeys","iam:ListAttachedRolePolicies","iam:ListEntitiesForPolicy","iam:ListInstanceProfilesForRole","iam:ListInstanceProfileTags","iam:ListMFADevices","iam:ListMFADeviceTags","iam:ListOpenIDConnectProviders","iam:ListOpenIDConnectProviderTags","iam:ListPolicies","iam:ListPoliciesGrantingServiceAccess","iam:ListPolicyTags","iam:ListPolicyVersions","iam:ListRolePolicies","iam:ListRoles","iam:ListRoleTags","iam:ListSAMLProviders","iam:ListSAMLProviderTags","iam:ListServerCertificates","iam:ListServerCertificateTags","iam:ListServiceSpecificCredentials","iam:ListSigningCertificates","iam:ListSSHPublicKeys","iam:ListVirtualMFADevices","iam:PutRolePolicy","iam:TagOpenIDConnectProvider","iam:TagPolicy","iam:TagRole","iam:UntagOpenIDConnectProvider","iam:UpdateRole","kms:CreateAlias","kms:CreateGrant","kms:CreateKey","kms:DeleteAlias","kms:DescribeKey","kms:EnableKeyRotation","kms:GetKeyPolicy","kms:GetKeyRotationStatus","kms:ListAliases","kms:ListResourceTags","kms:ScheduleKeyDeletion","kms:TagResource","kms:UpdateAlias","logs:CreateLogGroup","logs:CreateLogStream","logs:DeleteLogGroup","logs:DescribeLogGroups","logs:GetLogGroupFields","logs:ListTagsLogGroup","logs:PutLogEvents","logs:PutRetentionPolicy","logs:TagLogGroup","logs:UntagLogGroup","s3:CreateBucket","s3:DeleteBucket","s3:DeleteBucketPolicy","s3:DeleteObject","s3:DescribeJob","s3:Get*","s3:List*","s3:PutBucketOwnershipControls","s3:PutBucketPolicy","s3:PutBucketPublicAccessBlock","s3:PutBucketTagging","s3:PutBucketVersioning","s3:PutEncryptionConfiguration","s3:PutObject","sts:DecodeAuthorizationMessage"],"Effect":"Allow","Resource":"*","Sid":"BigAnimalBasePolicy"},{"Action":["ssm:AddTagsToResource","ssm:GetParameters","ssm:PutParameter"],"Effect":"Allow","Resource":"arn:aws:ssm:*:*:parameter/BA_*","Sid":"BigAnimalSystemsManagerParameterStorePolicy"},{"Action":["iam:PassRole","logs:FilterLogEvents"],"Effect":"Allow","Resource":["arn:aws:iam::*:role/ba-${external_id}-*","arn:aws:iam::*:role/biganimal-${suffix_role_name}","arn:aws:logs:*:*:log-group:/ecs/ba-bootstrap:log-stream:"],"Sid":"BigAnimalECSTaskPolicy"},{"Action":"secretsmanager:*","Effect":"Allow","Resource":"arn:aws:secretsmanager:*:*:secret:BA*","Sid":"BigAnimalSecretsPolicy"}]}
 EOF
   )
   echo "$biganimal_policy" > "${TMPDIR}"/biganimal_policy.json
 
   # create IAM policy using aws-cli
-  echo -e "Creating AWS IAM policy ${GREEN}${policy_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-  aws iam create-policy --policy-name "$policy_name" --policy-document file://"${TMPDIR}"/biganimal_policy.json \
-    > "${TMPDIR}"/biganimal_createpolicy_output.json
+  echo -e "Creating AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+  aws iam create-policy --policy-name "biganimal-$suffix_policy_name" --policy-document file://"${TMPDIR}"/biganimal_policy.json \
+    --output json > "${TMPDIR}"/biganimal_createpolicy_output.json
+  policy_arn=$(jq -r '.Policy.Arn' "${TMPDIR}"/biganimal_createpolicy_output.json)
 }
 
 create_iam_role()
 {
   # IAM Trust Policy
   biganimal_trustpolicy=$(cat <<EOF
-{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"AWS":"${biganimal_account_id}"},"Condition":{"StringEquals":{"sts:ExternalId":"${external_id}"}}}]}
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"AWS":"${biganimal_account_id}"},"Condition":{"StringEquals":{"sts:ExternalId":"${external_id}"}}},{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"Service":"ecs-tasks.amazonaws.com"}}]}
 EOF
   )
   echo "$biganimal_trustpolicy" > "${TMPDIR}"/biganimal_trustpolicy.json
 
   # create IAM role using aws-cli
-  echo -e "Creating AWS IAM role ${GREEN}${role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-  aws iam create-role --role-name "$role_name" --assume-role-policy-document file://"${TMPDIR}"/biganimal_trustpolicy.json \
-    > "${TMPDIR}"/biganimal_createrole_output.json
+  echo -e "Creating AWS IAM role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+  aws iam create-role --role-name "biganimal-$suffix_role_name" --assume-role-policy-document file://"${TMPDIR}"/biganimal_trustpolicy.json \
+    --output json > "${TMPDIR}"/biganimal_createrole_output.json
+  role_arn=$(jq -r '.Role.Arn' "${TMPDIR}"/biganimal_createrole_output.json)
+
+  # attach IAM policy to the newly created role
+  echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+  aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
 }
 
 increase_quotas()
@@ -284,15 +294,13 @@ increase_quotas()
 
 save_result()
 {
-  policy_arn=$(jq -r '.Policy.Arn' "${TMPDIR}"/biganimal_createpolicy_output.json)
-  role_arn=$(jq -r '.Role.Arn' "${TMPDIR}"/biganimal_createrole_output.json)
   echo ""
   echo "######################################################"
   echo -e "# Script Results running on AWS account ${GREEN}${account}${NC} #"
   echo "######################################################"
   echo ""
-  echo -e "Created AWS IAM policy ${GREEN}${policy_name}${NC} ARN is: ${GREEN}${policy_arn}${NC}"
-  echo -e "Created AWS IAM role ${GREEN}${role_name}${NC} ARN is: ${GREEN}${role_arn}${NC}"
+  echo -e "Created AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} ARN is: ${GREEN}${policy_arn}${NC}"
+  echo -e "Created AWS IAM role ${GREEN}biganimal-${suffix_role_name}${NC} ARN is: ${GREEN}${role_arn}${NC}"
   if [[ "$increase_quota" == "true" ]]; then
     for quota_code in "${!quota_increases[@]}"; do
       echo -e "Requested AWS Service quota increase for ${GREEN}${quota_names["$quota_code"]}${NC}, quota requested is: ${GREEN}${quota_increases["$quota_code"]}${NC}"
@@ -301,7 +309,7 @@ save_result()
     echo -e "${GREEN}https://${region}.console.aws.amazon.com/servicequotas/home/requests?region=${region}#${NC}"
   fi
   # exporting JSON "ba-passport.json" that will be used by BigAnimal CLI
-  echo "{\"${role_name}\":\"${role_arn}\"}" > "$CURRENT_PATH"/ba-passport.json
+  echo "{\"biganimal-${suffix_role_name}\":\"${role_arn}\"}" > "$CURRENT_PATH"/ba-passport.json
 }
 
 check

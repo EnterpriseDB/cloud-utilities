@@ -6,6 +6,11 @@
             "Action": "sts:AssumeRole",
             "Principal": {"AWS": "987654321098"},
             "Condition": {"StringEquals": {"sts:ExternalId": "aA1bB2cC3dD4eE5f"}}
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "ecs-tasks.amazonaws.com"}
         }
     ]
   }

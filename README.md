@@ -66,6 +66,6 @@ IAM Trust Policy applied to the created IAM role here:
 [2]: https://portal.biganimal.com/api/docs/
 [3]: https://stedolan.github.io/jq/
 [4]: https://docs.microsoft.com/en-us/cli/azure/
-[5]: https://www.enterprisedb.com/docs/biganimal/latest/reference
+[5]: https://www.enterprisedb.com/docs/biganimal/latest/reference/api/
 [6]: https://aws.amazon.com/cli/
 [7]: https://www.enterprisedb.com/docs/biganimal/latest/reference/cli/

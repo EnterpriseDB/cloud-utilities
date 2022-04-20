@@ -214,11 +214,11 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -p|--policy-name-suffix)
-      policy_name="$2"
+      suffix_policy_name="$2"
       shift 2
       ;;
     -r|--role-name-suffix)
-      role_name="$2"
+      suffix_role_name="$2"
       shift 2
       ;;
     -q|--increase-quotas)

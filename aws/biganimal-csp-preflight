@@ -349,6 +349,8 @@ function _onexit {
   echo -e "You can also run ${GREEN}aws support create-case help${NC} or ${GREEN}aws service-quotas request-service-quota-increase help${NC} for more examples."
 
   rm -rf "${TMPDIR}"
+  [ -n "$ba_preflight" ] && exit 2
+  exit 0
 }
 trap _onexit EXIT
 pushd "${TMPDIR}" > /dev/null 2>&1 || exit

@@ -269,6 +269,19 @@ EOF
   # attach IAM policy to the newly created role
   echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
   aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
+
+  # create ECS srvice linked role if not existed
+  set +e
+  service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForECS)
+  if [ $? -ne 0 ]; then
+    echo -e "Cannot find the ECS service-linked role, will create one"
+    service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com | jq -r '.Role.Arn')
+    echo -e "Create the ECS service-linked role ${service_linked_role_arn}"
+  else
+    service_linked_role_arn=$(echo $service_linked_role | jq -r .'Role.Arn')
+    echo -e "Found the ECS service-linked role ${service_linked_role_arn}, will not create"
+  fi
+  set -e
 }
 
 increase_quotas()

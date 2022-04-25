@@ -272,10 +272,10 @@ EOF
 
   # create ECS srvice linked role if not existed
   set +e
-  service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForECS)
+  service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForECS --output json --no-cli-pager)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the ECS service-linked role, will create one"
-    service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com | jq -r '.Role.Arn')
+    service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com --output json --no-cli-pager | jq -r '.Role.Arn')
     echo -e "Create the ECS service-linked role ${service_linked_role_arn}"
   else
     service_linked_role_arn=$(echo $service_linked_role | jq -r .'Role.Arn')

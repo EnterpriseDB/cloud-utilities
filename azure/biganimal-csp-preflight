@@ -359,7 +359,7 @@ function validate_subscription() {
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
   user_name=$(echo $1 | jq -r .userPrincipalName)
-  count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json | jq length)
+  count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json --only-show-errors | jq length)
   if [ "$count" = "0" ]; then
     store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
   fi
@@ -376,7 +376,7 @@ function validate_user_type() {
 function check_onboard() {
   #### Azure Subscription Checking
   account=$(az account show -s $subscription -o json)
-  signed_in_user=$(az ad signed-in-user show -o json)
+  signed_in_user=$(az ad signed-in-user show -o json --only-show-errors)
   validate_subscription "$account"
   validate_role_assignment "$signed_in_user"
   validate_user_type "$signed_in_user"
@@ -475,7 +475,7 @@ echo "#######################"
 echo ""
 vmsku_mgmt=$mgmt_vm_type
 vmsku_pg=$pg_vm_type
-az vm list-skus -l $region -o table > $TMP_SKU_OUTPUT
+az vm list-skus -l $region --all -o table > $TMP_SKU_OUTPUT
 sku_restriction_mgmt=$(get_sku_restriction_for ${vmsku_mgmt})
 sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
 

@@ -73,8 +73,20 @@ check()
 {
   # jq is required.
   hash jq > /dev/null 2>&1 || { show_help; echo "Error: please install jq on the system"; }
+  check_az_version
   check_display_name
   check_subscription
+}
+
+#### Check Azure CLI version
+function check_az_version {
+  version=$(az version --query \"azure-cli\" -o tsv)
+  if command -v clouddrive &> /dev/null; then
+    echo "Run Azure CSP setup with azure-cli ${version} in Azure Cloud shell"
+  else
+    [[ "${version}" =~ ^2.30.* ]] && suggest "alert" "error: upgrade azure-cli to 2.31.0 or later" && exit 1
+    echo "Run Azure CSP setup with azure-cli ${version}"
+  fi
 }
 
 check_display_name()
@@ -107,7 +119,7 @@ check_years()
 check_id()
 {
   if [[ -n "${client_id}" ]]; then
-    display_name=$(az ad app show --id "${client_id}" -o tsv --query displayName)
+    display_name=$(az ad app show --id "${client_id}" -o tsv --query displayName --only-show-errors)
   fi
 }
 
@@ -197,13 +209,13 @@ add_spn_owners()
 {
   # add current user and spn to the SPN owner list
   [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
-  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
-  user_object_id=$(az ad signed-in-user show -o tsv --query objectId)
+  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId --only-show-errors)
+  user_object_id=$(az ad signed-in-user show -o tsv --query objectId --only-show-errors)
 
   echo "Add Azure AD Service Principal Owners..."
   # To add owners to application
-  az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}"
-  az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}"
+  az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}" --only-show-errors
+  az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}" --only-show-errors
 
   # To add owners to service principal
   retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
@@ -214,7 +226,7 @@ add_spn_owners()
 grant_api_permissions()
 {
   # Add graph API permissions to the SPN, and grant admin consent
-  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId)
+  sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId --only-show-errors)
   # Microsoft Graph Application ID: 00000003-0000-0000-c000-000000000000
   # retrieve Application.ReadWrite.OwnedBy appId: 18a4783c-866b-4cc7-a460-3d5e5662c884
   # az ad sp show --id 00000003-0000-0000-c000-000000000000 \
@@ -234,7 +246,7 @@ grant_api_permissions()
     --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
 
   # To grant admin consent
-  resourceId=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query "objectId" --output tsv)
+  resourceId=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query "objectId" --output tsv --only-show-errors)
   az rest --method POST \
     --uri https://graph.microsoft.com/v1.0/servicePrincipals/"${sp_object_id}"/appRoleAssignments \
     --headers Content-Type=application/json --output none \
@@ -261,7 +273,7 @@ print_and_save_result()
   tenant=$(az account show -s "${subscription}" -o json | jq -r .tenantId)
   jq --null-input \
     --arg client_id "${client_id}" \
-    --arg client_secret "${client_secret}" \
+    --arg client_secret "REDACTED" \
     --arg subscription "${subscription}" \
     --arg tenant "${tenant}" \
     '{"client_id":$client_id,"client_secret":$client_secret,"subscription_id":$subscription,"tenant_id":$tenant}'

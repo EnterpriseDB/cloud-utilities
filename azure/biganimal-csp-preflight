@@ -1,0 +1,558 @@
+#!/usr/bin/env bash
+#
+# Copyright 2021,2022 EnterpriseDB Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script is used as a preflight check to tell if the given region
+# in your Azure subscription can meet the requirement for BigAnimal to create the
+# PostgreSQL cluster in.
+#
+# Given one the below input:
+#   - (mandatory) Azure subscription ID
+#   - (mandatory) region
+#   - PostgreSQL cluster's instance type
+#   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - network type (private, or public)
+# it checks the below requirement:
+#   - the user is the 'owner' of the Azure subscription
+#   - the given Azure subscription has the necessary service providers registered
+#   - the given region:
+#     * if there is enough SKU(Stock Keeping Unit) left in that region for your PostgreSQL
+#       cluster's type (of the Virtual Machine)
+#     * if there is enough Virtual Machine quota left for this PostgreSQL cluster type
+#       in your Azure subscription
+#     * if there is enough IP left to expose the service for you to access the
+#       PostgreSQL cluster
+#
+# The output of this script tells any unsatisfied condition and report in the form
+# of table.
+#
+# For more details, please refer to:
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
+#
+set -e
+[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo "This script does not support Bash version 3 and below" && show_help && exit 1
+
+NEEDS_QUOTA_INCREASE="false"
+
+function show_help()
+{
+    echo "Usage: $0 [options] <target-subscription> <region>"
+    echo ""
+    echo "Arguments:"
+    echo "    <target-subscription>    Azure subscription for BigAnimal deployment"
+    echo "    <region>                 Azure region for BigAnimal deployment"
+    echo
+    echo "Options:"
+    echo "    -h, --help               Print this help message"
+    echo "    -i, --instance-type      Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
+    echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
+    echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
+    echo "    --onboard                Check if the user and subscription are configured appropriately"
+    echo
+    echo "Behavior defaults to --onboard if no other options provided."
+    echo
+    echo "Examples:"
+    echo "    $0 --onboard 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo "    $0 -i e2s_v3 --high-availability -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo
+    echo "Available regions are: "
+    echo "  ${AVAILABLE_REGIONS[@]}"
+    echo "Available instance types are: "
+    echo "  ${AVAILABLE_INSTANCETYPE[@]}"
+    echo "Available endpoint flavors are: "
+    echo "  ${AVAILABLE_ENDPOINTS[@]}"
+}
+
+AVAILABLE_ENDPOINTS=(
+  public
+  private
+)
+
+AVAILABLE_REGIONS=(
+    australiaeast
+    brazilsouth
+    canadacentral
+    centralus
+    eastus
+    eastus2
+    francecentral
+    japaneast
+    northeurope
+    norwayeast
+    southcentralus
+    southeastasia
+    uksouth
+    westeurope
+    westus2
+    westus3
+)
+
+AVAILABLE_INSTANCETYPE=(
+  e2s_v3
+  e4s_v3
+  e8s_v3
+  e16s_v3
+  e20s_v3
+  e32s_v3
+  e48s_v3
+  e64s_v3
+  e2s_v4
+  e4s_v4
+  e8s_v4
+  e16s_v4
+  e20s_v4
+  e32s_v4
+  e48s_v4
+  e64s_v4
+  f2s_v2
+  f4s_v2
+  f8s_v2
+  f16s_v2
+  f32s_v2
+  f48s_v2
+  f64s_v2
+  f72s_v2
+  d2s_v4
+  d4s_v4
+  d8s_v4
+  d16s_v4
+  d32s_v4
+  d48s_v4
+  d64s_v4
+  d2s_v3
+  d4s_v3
+  d8s_v3
+  d16s_v3
+  d32s_v3
+  d48s_v3
+  d64s_v3
+)
+
+function _toLower()
+{
+    echo ${1,,}
+}
+
+function _toUpper()
+{
+    echo ${1^^}
+}
+
+function _extract_instancetype_info()
+{
+    local instance_type=$(_toLower $1)
+
+    # extract vcpu/vm_type/vm_family from the given instance_type
+    local vcpu=0
+    local serie=""
+    local psa=""
+    local version=""
+    local vm_type=""
+    local family=""
+
+    # given "e20s_v3", the regex pattern is (e)(20)(s)_(v3)
+    if [[ "${instance_type}" =~ ([a-z]*)([0-9]*)([a-z]*)_(v.*) ]]; then
+      serie="${BASH_REMATCH[1]}"
+      vcpu="${BASH_REMATCH[2]}"
+      psa="${BASH_REMATCH[3]}"
+      version="${BASH_REMATCH[4]}"
+      vm_type="Standard_$(_toUpper $serie)${vcpu}${psa}_${version}"
+      family="Standard $(_toUpper $serie)$(_toUpper ${psa})${version} Family"
+    else
+      echo "Error: unsupported instance type: $1"
+      exit 1
+    fi
+
+    echo "$vcpu" "$vm_type" "$family"
+    return 0
+}
+
+# Default values for trial onboarding
+endpoint="public"
+instance_type="e2s_v3"
+ha=false
+activate=false
+onboard=false
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  key="$1"
+
+  case $key in
+    -i|--instance-type)
+      instance_type="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -e|--endpoint)
+      endpoint="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -a|--high-availability)
+      ha=true
+      shift # past argument
+      ;;
+    -r|--activate-region)
+      activate=true
+      shift # past argument
+      ;;
+    --onboard)
+      onboard=true
+      activate=true
+      shift # past argument
+      ;;
+    -h|--help)
+      show_help
+      exit 1
+      ;;
+    *)    # unknown option
+      POSITIONAL+=("$1") # save it in an array for later
+      shift # past argument
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+subscription=$1
+region=$2
+
+[ -z "$subscription" ] && show_help && exit 1
+# set az cli account to the given subscription to validate it is valid
+az account set -s $subscription
+
+[ -z "$region" ] && show_help && exit 1
+[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
+    && echo "error: unsupported region - ${region}" \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_INSTANCETYPE[@]}" =~ "${instance_type}" ]] \
+    && echo "error: unsupported Postgres instance type - ${instance_type}" \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] \
+    && echo "error: invalid endpoint flavor - ${endpoint}" \
+    && show_help \
+    && exit 1
+
+# extract postgres workload used VM instance type info
+instance_type_info=($(_extract_instancetype_info "$instance_type"))
+pg_vm_vcpu=${instance_type_info[0]}
+pg_vm_type=${instance_type_info[1]}
+pg_vm_family="${instance_type_info[2]} ${instance_type_info[3]} ${instance_type_info[4]}"
+[[ "${pg_vm_type}" = "" ]] \
+    && echo "error: unsupported Postgres instance type" \
+    && show_help \
+    && exit 1
+
+# hardcode management workload used VM instance type info
+mgmt_vm_vcpu=2
+mgmt_vm_type="Standard_D2_v4"
+mgmt_vm_family="Standard Dv4 Family"
+
+function infra_vcpus()
+{
+    [ "$activate" = "true" ] && echo 8 || echo 0
+}
+
+function need_public_ip()
+{
+    [ "$endpoint" = "public" ] && echo 1 || echo 0
+}
+
+function need_pg_vcpus_for()
+{
+    local vcpu=$1
+    local ha=$2
+    local replica=1
+    [ "$ha" = "true" ] && replica=3
+
+    echo $((vcpu*replica))
+}
+
+# call azure-cli to for usages of VM and Network
+TMPDIR=$(mktemp -d)
+
+function _onexit {
+  #### Print Final Suggestions Result
+  echo ""
+  echo "#######################"
+  echo "# Overall Suggestions #"
+  echo "#######################"
+  echo ""
+  cat $TMP_SUGGESTION
+
+  echo ""
+  echo "Please open a ticket to Azure if need to raise quota limit."
+  echo "Open https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest for more info."
+  echo -e "You can also run \033[0;32maz support tickets create --help\033[0m for more examples."
+
+  rm -rf "${TMPDIR}"
+  [ "$NEEDS_QUOTA_INCREASE" == "true" ] && exit 2
+  exit 0
+}
+trap _onexit EXIT
+pushd "${TMPDIR}" > /dev/null 2>&1 || exit
+
+TMP_VM_OUTPUT=$TMPDIR/vm_$$
+TMP_NW_OUTPUT=$TMPDIR/ip_$$
+TMP_SKU_OUTPUT=$TMPDIR/sku_$$
+TMP_PROVIDER_OUTPUT=$TMPDIR/provider_$$
+TMP_SUGGESTION=$TMPDIR/suggestions_$$
+touch $TMP_SUGGESTION
+
+function suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m'
+    if [ "$highlight" = 'alert' ]; then
+        echo -e "${RED}${what}${NC}"
+    else
+        echo -e "${GREEN}${what}${NC}"
+    fi
+}
+
+function store_suggestion()
+{
+    echo "$1" >> $TMP_SUGGESTION
+}
+
+#### Check Azure CLI version
+function check_az_version {
+  version=$(az version --query \"azure-cli\" -o tsv)
+  if command -v clouddrive &> /dev/null; then
+    echo "Run Azure Preflight Checks with azure-cli ${version} in Azure Cloud shell"
+  else
+    [[ "${version}" =~ ^2.30.* ]] && suggest "alert" "error: upgrade azure-cli to 2.31.0 or later" && exit 1
+    echo "Run Azure Preflight Checks with azure-cli ${version}"
+  fi
+}
+check_az_version
+
+function validate_subscription() {
+  state=$(echo $1 | jq -r .state)
+  if [ "$state" != "Enabled" ]; then
+    store_suggestion "Azure subscription $subscription state should be Enabled"
+  fi
+  tenant_id=$(echo $account | jq -r .tenantId)
+  store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
+}
+
+#### Azure User Role Assignment Checking
+function validate_role_assignment() {
+  user_name=$(echo $1 | jq -r .userPrincipalName)
+  count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json --only-show-errors | jq length)
+  if [ "$count" = "0" ]; then
+    store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
+  fi
+}
+
+#### Azure User Type Checking
+function validate_user_type() {
+  user_type=$(echo $1 | jq -r .userType)
+  if [ "$user_type" != "Member" ]; then
+    store_suggestion "Current user is a $user_type user, not Member user"
+  fi
+}
+
+function check_onboard() {
+  #### Azure Subscription Checking
+  account=$(az account show -s $subscription -o json)
+  signed_in_user=$(az ad signed-in-user show -o json --only-show-errors)
+  validate_subscription "$account"
+  validate_role_assignment "$signed_in_user"
+  validate_user_type "$signed_in_user"
+}
+
+[ "$onboard" = "true" ] && check_onboard
+
+#### Azure Provider Checking
+# Enabled Microsoft.AlertsManagement provider for Failure Anomalies alert rule which is deployed with Application insights autometically
+REQUIRED_PROVIDER=(
+  "Microsoft.Capacity"
+  "Microsoft.ContainerInstance"
+  "Microsoft.Compute"
+  "Microsoft.ContainerService"
+  "Microsoft.KeyVault"
+  "Microsoft.ManagedIdentity"
+  "Microsoft.Network"
+  "Microsoft.OperationalInsights"
+  "Microsoft.OperationsManagement"
+  "Microsoft.Portal"
+  "Microsoft.Storage"
+  "Microsoft.AlertsManagement"
+)
+
+function provider_suggest()
+{
+    local st=$1
+    local what=$2
+    if [ "$st" = "Registered" ]; then
+        suggest "$st" ok
+    else
+        store_suggestion "Provider '$what' is '$st'"
+        suggest "$st" alert
+    fi
+}
+
+echo ""
+echo "#######################"
+echo "# Provider            #"
+echo "#######################"
+echo ""
+az provider list -o table > $TMP_PROVIDER_OUTPUT
+
+# print the provider checking result
+FMT="%-40s %-21s %-20b %-s\n"
+printf "$FMT" "Namespace"                               "RegistrationPolicy"   "RegistrationState"   "ProviderAuthorizationConsentState"
+printf "$FMT" "---------------------------------------" "--------------------" "-------------------" "-----------------------------------"
+
+unavail=false
+for required_provider in ${REQUIRED_PROVIDER[@]}; do
+    col=($(< $TMP_PROVIDER_OUTPUT grep -w $required_provider))
+    provider_namespace=${col[0]}
+    registration_policy=${col[1]}
+    registation_state=${col[2]}
+    provider_authorization_consent_state=${col[3]}
+    if [[ $registation_state == *"NotRegistered"* ]]; then
+      unavail=true
+    fi
+    printf "$FMT" "$provider_namespace" "$registration_policy" $(provider_suggest "$registation_state" "$required_provider") "$provider_authorization_consent_state"
+done
+
+if [ $unavail = "true" ]; then
+    store_suggestion "Register all required providers before continue"
+    cat $TMP_SUGGESTION
+    exit 1
+fi
+
+function get_sku_zone_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
+}
+
+function get_sku_restriction_for()
+{
+    local what=$1
+    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
+}
+
+function sku_suggest()
+{
+    local restriction=$1
+    local sku=$2
+    if [ "$restriction" = "None" ] || ([[ $restriction == *"type: Zone"* ]] && [ "$sku" = "$mgmt_vm_type" ]); then
+        suggest "None" ok
+    else
+        store_suggestion "virtualMachines SKU '$sku' has '$restriction'"
+        suggest "$restriction" alert
+    fi
+}
+
+echo ""
+echo "#######################"
+echo "# Virtual-Machine SKU #"
+echo "#######################"
+echo ""
+vmsku_mgmt=$mgmt_vm_type
+vmsku_pg=$pg_vm_type
+az vm list-skus -l $region --all -o table > $TMP_SKU_OUTPUT
+sku_restriction_mgmt=$(get_sku_restriction_for ${vmsku_mgmt})
+sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
+
+# print region Azure VM SKU checking result
+FMT="%-17s %-22s %-23s %-8s %-b\n"
+printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
+printf "$FMT" "------------" "---------" "----" "-----" "------------"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for ${vmsku_mgmt})" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for ${vmsku_pg})" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
+
+echo ""
+echo "#######################"
+echo "# Quota Limitation    #"
+echo "#######################"
+echo ""
+az vm list-usage -l $region -o table > $TMP_VM_OUTPUT
+az network list-usages -l $region -o table > $TMP_NW_OUTPUT || true
+
+# parse VM usage
+function get_vm_usage_for()
+{
+    local what=$1
+    < $TMP_VM_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
+}
+
+regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
+mgmt_vcpus=($(get_vm_usage_for "$mgmt_vm_family vCPUs"))
+pg_vcpus=($(get_vm_usage_for "$pg_vm_family vCPUs"))
+
+# parse network usage
+function get_nw_usage_for()
+{
+    local what=$1
+    < $TMP_NW_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
+}
+
+publicip_standard=($(get_nw_usage_for "Public IP Addresses - Standard"))
+
+# calculate available resources
+free_regional_vcpus=$((${regional_vcpus[1]} - ${regional_vcpus[0]}))
+free_mgmt_vcpus=$((${mgmt_vcpus[1]} - ${mgmt_vcpus[0]}))
+free_pg_vcpus=$((${pg_vcpus[1]} - ${pg_vcpus[0]}))
+free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
+
+# calculate required resources
+need_mgmt_vcpus=$(infra_vcpus)
+need_pg_vcpus=$(need_pg_vcpus_for $pg_vm_vcpu $ha)
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus))
+need_publicip_standard=$(need_public_ip)
+
+# calculate gap of "need - free"
+gap_mgmt_vcpus=$((free_mgmt_vcpus - need_mgmt_vcpus))
+gap_pg_vcpus=$((free_pg_vcpus - need_pg_vcpus))
+gap_regional_vcpus=$((free_regional_vcpus - $need_regional_vcpus))
+gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
+
+function quota_suggest()
+{
+    local gap=$1
+    local resource=$2
+    if [ "$gap" -lt 0 ]; then
+        store_suggestion "Resource '$resource' quota in '$region' has a gap of '$gap'"
+        suggest "Increase Quota by ${gap:1}" alert
+    else
+        suggest "OK" ok
+    fi
+}
+
+# print region resources quota limitation checking result
+FMT="%-32s %-8s %-8s %-11s %-11s %-8s %-11b\n"
+printf "$FMT" "Resource" "Limit" "Used" "Available" "Required" "Gap" "Suggestion"
+printf "$FMT" "--------" "-----" "----" "---------" "--------" "---" "----------"
+printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_regional_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
+printf "$FMT" "$mgmt_vm_family vCPUs" ${mgmt_vcpus[1]} ${mgmt_vcpus[0]} ${free_mgmt_vcpus} ${need_mgmt_vcpus} ${gap_mgmt_vcpus} "$(quota_suggest $gap_mgmt_vcpus "$mgmt_vm_family vCPUs")"
+printf "$FMT" "$pg_vm_family vCPUs" ${pg_vcpus[1]} ${pg_vcpus[0]} ${free_pg_vcpus} ${need_pg_vcpus} ${gap_pg_vcpus} "$(quota_suggest $gap_pg_vcpus "$pg_vm_family vCPUs")"
+printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} ${need_publicip_standard} ${gap_publicip_standard} "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
+
+if [ "${gap_regional_vcpus}" -lt 0 ] || [ "${gap_mgmt_vcpus}" -lt 0 ] || [ "${gap_pg_vcpus}" -lt 0 ] || [ "${gap_publicip_standard}" -lt 0 ]; then
+  NEEDS_QUOTA_INCREASE="true"
+fi

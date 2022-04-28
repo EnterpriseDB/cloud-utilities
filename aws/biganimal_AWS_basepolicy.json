@@ -114,6 +114,7 @@
                 "iam:TagPolicy",
                 "iam:TagRole",
                 "iam:UntagOpenIDConnectProvider",
+                "iam:UpdateAssumeRolePolicy",
                 "iam:UpdateRole",
                 "kms:CreateAlias",
                 "kms:CreateGrant",

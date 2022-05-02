@@ -10,6 +10,9 @@ where the scripts provided in this repository are used:
 - [jq][3]
 - [azure cli][4] v2.26 or above (if runs against Azure)
 - [aws-cli][6] v.2.3.0 or above (if runs against AWS)
+- [BASH] [8] AWS preflight scripts require BASH 4 or newer the default in MACOS is 3.x
+
+All 4 of these can be installed using the guides noted at the end of this dock or using homebrew. 
 
 ## Azure Scripts
 
@@ -71,3 +74,4 @@ IAM Trust Policy applied to the created IAM role here:
 [5]: https://www.enterprisedb.com/docs/biganimal/latest/reference/api/
 [6]: https://aws.amazon.com/cli/
 [7]: https://www.enterprisedb.com/docs/biganimal/latest/reference/cli/
+[8]: https://formulae.brew.sh/formula/bash

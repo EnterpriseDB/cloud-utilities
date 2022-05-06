@@ -163,7 +163,8 @@
             "Action": [
                 "ssm:AddTagsToResource",
                 "ssm:GetParameters",
-                "ssm:PutParameter"
+                "ssm:PutParameter",
+                "ssm:DeleteParameters"
             ],
             "Effect": "Allow",
             "Resource": "arn:aws:ssm:*:*:parameter/BA_*",

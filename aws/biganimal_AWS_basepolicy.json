@@ -153,6 +153,7 @@
                 "s3:PutBucketVersioning",
                 "s3:PutEncryptionConfiguration",
                 "s3:PutObject",
+                "servicequotas:ListServiceQuotas",
                 "sts:DecodeAuthorizationMessage"
             ],
             "Effect": "Allow",

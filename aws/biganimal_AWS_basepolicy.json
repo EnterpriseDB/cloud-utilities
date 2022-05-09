@@ -3,6 +3,9 @@
     "Statement": [
         {
             "Action": [
+                "autoscaling:DescribeAccountLimits",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:ListMetrics",
                 "dynamodb:CreateTable",
                 "dynamodb:DeleteItem",
                 "dynamodb:DescribeContinuousBackups",

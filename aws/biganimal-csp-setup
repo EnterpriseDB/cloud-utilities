@@ -244,11 +244,37 @@ EOF
   )
   echo "$biganimal_policy" > "${TMPDIR}"/biganimal_policy.json
 
-  # create IAM policy using aws-cli
-  echo -e "Creating AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-  aws iam create-policy --policy-name "biganimal-$suffix_policy_name" --policy-document file://"${TMPDIR}"/biganimal_policy.json \
-    --output json > "${TMPDIR}"/biganimal_createpolicy_output.json
-  policy_arn=$(jq -r '.Policy.Arn' "${TMPDIR}"/biganimal_createpolicy_output.json)
+  # verify if an IAM policy with the same name is already existing
+  policy_exists=$(aws iam list-policies --scope Local \
+    --query "length(Policies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].Arn)" \
+    --output json)
+  if [ "$policy_exists" -gt 0 ]; then
+    # an IAM policy with the same name already exists
+    # checking if it has more than 5 policy versions (that is the max allowed)
+    # https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreatePolicyVersion.html
+    policy_arn=$(aws iam list-policies --scope Local \
+      --query "Policies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].Arn" \
+      --output text)
+    echo -e "Updating AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+    policy_versions=$(aws iam list-policy-versions --policy-arn "$policy_arn" --output json --no-cli-pager \
+      --query "length(Versions[*].VersionId)")
+    if [ "$policy_versions" -eq 5 ]; then
+      # there are already 5 Policy Versions of this policy, going to delete the oldest one
+      policy_get_older_version=$(aws iam list-policy-versions --policy-arn "$policy_arn" --output text \
+        --no-cli-pager --query "Versions[-1].VersionId")
+      aws iam delete-policy-version --policy-arn "$policy_arn" --version-id "$policy_get_older_version" \
+        --output json > "${TMPDIR}"/biganimal_deletepolicyversion_output.json
+    fi
+    # create a new Policy Version and set it as default
+    aws iam create-policy-version --policy-arn "$policy_arn" --policy-document file://"${TMPDIR}"/biganimal_policy.json \
+      --set-as-default --output json > "${TMPDIR}"/biganimal_createpolicyversion_output.json
+  else
+    # create IAM policy using aws-cli
+    echo -e "Creating AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+    aws iam create-policy --policy-name "biganimal-$suffix_policy_name" --policy-document file://"${TMPDIR}"/biganimal_policy.json \
+      --output json > "${TMPDIR}"/biganimal_createpolicy_output.json
+    policy_arn=$(jq -r '.Policy.Arn' "${TMPDIR}"/biganimal_createpolicy_output.json)
+  fi
 }
 
 create_iam_role()
@@ -260,15 +286,48 @@ EOF
   )
   echo "$biganimal_trustpolicy" > "${TMPDIR}"/biganimal_trustpolicy.json
 
-  # create IAM role using aws-cli
-  echo -e "Creating AWS IAM role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-  aws iam create-role --role-name "biganimal-$suffix_role_name" --assume-role-policy-document file://"${TMPDIR}"/biganimal_trustpolicy.json \
-    --output json > "${TMPDIR}"/biganimal_createrole_output.json
-  role_arn=$(jq -r '.Role.Arn' "${TMPDIR}"/biganimal_createrole_output.json)
+  # verify if an IAM role with the same name is already existing
+  role_exists=$(aws iam list-roles \
+    --query "length(Roles[*]|[?starts_with(RoleName, \`biganimal-${suffix_role_name}\`) == \`true\`]|[*].Arn)" \
+    --output json)
+  if [ "$role_exists" -gt 0 ]; then
+    # the IAM role already exists, going to update the same
+    role_arn=$(aws iam list-roles --query "Roles[*]|[?starts_with(RoleName, \`biganimal-${suffix_role_name}\`) == \`true\`]|[*].Arn" \
+      --output text)
+    echo -e "Updating AWS IAM role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+    aws iam update-assume-role-policy --role-name "biganimal-$suffix_role_name" --policy-document file://"${TMPDIR}"/biganimal_trustpolicy.json \
+      --output json > "${TMPDIR}"/biganimal_updaterole_output.json
+    # checking if the existing role is having the policy attached to it
+    policy_attached=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" \
+      --query "length(AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn)" \
+      --output json)
+    if [ "$policy_attached" -gt 0 ]; then
+      # a policy is attached to the role, going to check if it is the correct one
+      attached_policy_arn=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" \
+        --query "AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn" \
+        --output text)
+      if [ "$attached_policy_arn" != "$policy_arn" ]; then
+        # the created policy arn is not the same that is attached to the role, going to detach the old attached policy and attach the new one
+        echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+        aws iam detach-role-policy --policy-arn "$attached_policy_arn" --role-name "biganimal-$suffix_role_name"
+        aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
+      fi
+    else
+      # no policy seems attached to this role, going to attach it
+      echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+      aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
+    fi
+  else
+    # create IAM role using aws-cli
+    echo -e "Creating AWS IAM role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+    aws iam create-role --role-name "biganimal-$suffix_role_name" --assume-role-policy-document file://"${TMPDIR}"/biganimal_trustpolicy.json \
+      --output json > "${TMPDIR}"/biganimal_createrole_output.json
+    role_arn=$(jq -r '.Role.Arn' "${TMPDIR}"/biganimal_createrole_output.json)
 
-  # attach IAM policy to the newly created role
-  echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-  aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
+    # attach IAM policy to the newly created role
+    echo -e "Attaching AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+    aws iam attach-role-policy --policy-arn "$policy_arn" --role-name "biganimal-$suffix_role_name"
+  fi
 
   # create ECS, EKS and ELB service linked roles if not exists
   set +e
@@ -276,28 +335,28 @@ EOF
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the ECS service-linked role, will create one"
     ecs_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "ecs.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Create the ECS service-linked role ${ecs_service_linked_role_arn}"
+    echo -e "Creating the ECS service-linked role ${GREEN}${ecs_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
   else
     ecs_service_linked_role_arn=$(echo "$ecs_service_linked_role" | jq -r .'Role.Arn')
-    echo -e "Found the ECS service-linked role ${ecs_service_linked_role_arn}, will not create"
+    echo -e "Found the ECS service-linked role ${ecs_service_linked_role_arn}, there's no need to create it"
   fi
   eks_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForAmazonEKSNodegroup --output json --no-cli-pager)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the EKS service-linked role, will create one"
     eks_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "eks-nodegroup.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Create the EKS service-linked role ${eks_service_linked_role_arn}"
+    echo -e "Creating the EKS service-linked role ${GREEN}${eks_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
   else
     eks_service_linked_role_arn=$(echo "$eks_service_linked_role" | jq -r .'Role.Arn')
-    echo -e "Found the EKS service-linked role ${eks_service_linked_role_arn}, will not create"
+    echo -e "Found the EKS service-linked role ${eks_service_linked_role_arn}, there's no need to create it"
   fi
   elb_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForElasticLoadBalancing --output json --no-cli-pager)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the ELB service-linked role, will create one"
     elb_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "elasticloadbalancing.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Create the ELB service-linked role ${elb_service_linked_role_arn}"
+    echo -e "Creating the ELB service-linked role ${GREEN}${elb_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
   else
     elb_service_linked_role_arn=$(echo "$elb_service_linked_role" | jq -r .'Role.Arn')
-    echo -e "Found the ELB service-linked role ${elb_service_linked_role_arn}, will not create"
+    echo -e "Found the ELB service-linked role ${elb_service_linked_role_arn}, there's no need to create it"
   fi
   set -e
 }

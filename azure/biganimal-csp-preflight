@@ -266,7 +266,7 @@ mgmt_vm_family="Standard Dv4 Family"
 
 function infra_vcpus()
 {
-    [ "$activate" = "true" ] && echo 8 || echo 0
+    [ "$activate" = "true" ] && echo 14 || echo 0
 }
 
 function need_public_ip()

@@ -12,6 +12,8 @@
                 "dynamodb:DescribeTable",
                 "dynamodb:GetItem",
                 "dynamodb:PutItem",
+                "dynamodb:TagResource",
+                "dynamodb:UntagResource",
                 "ec2:AllocateAddress",
                 "ec2:AssociateRouteTable",
                 "ec2:AttachInternetGateway",

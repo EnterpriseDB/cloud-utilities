@@ -1,0 +1,324 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "autoscaling:CreateOrUpdateTags",
+        "autoscaling:DeleteTags",
+        "autoscaling:DescribeAccountLimits",
+        "autoscaling:DescribeTags",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:ListMetrics",
+        "ec2:AllocateAddress",
+        "ec2:AssociateRouteTable",
+        "ec2:AttachInternetGateway",
+        "ec2:CreateEgressOnlyInternetGateway",
+        "ec2:CreateInternetGateway",
+        "ec2:CreateNatGateway",
+        "ec2:CreateNetworkAcl",
+        "ec2:CreateNetworkAclEntry",
+        "ec2:DeleteNetworkAclEntry",
+        "ec2:CreateRoute",
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet",
+        "ec2:CreateTags",
+        "ec2:CreateVpc",
+        "ec2:CreateVpcEndpoint",
+        "ec2:Describe*",
+        "ec2:Get*",
+        "ec2:ListSnapshotsInRecycleBin",
+        "ecs:CreateCluster",
+        "ecs:RegisterTaskDefinition",
+        "eks:CreateAddon",
+        "eks:CreateCluster",
+        "eks:CreateNodegroup",
+        "eks:Describe*",
+        "eks:List*",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "iam:GetAccountSummary",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAccessKeys",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListEntitiesForPolicy",
+        "iam:ListInstanceProfileTags",
+        "iam:ListInstanceProfilesForRole",
+        "iam:ListMFADeviceTags",
+        "iam:ListMFADevices",
+        "iam:ListOpenIDConnectProviderTags",
+        "iam:ListOpenIDConnectProviders",
+        "iam:ListPolicies",
+        "iam:ListPoliciesGrantingServiceAccess",
+        "iam:ListPolicyTags",
+        "iam:ListPolicyVersions",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags",
+        "iam:ListRoles",
+        "iam:ListSAMLProviderTags",
+        "iam:ListSAMLProviders",
+        "iam:ListSSHPublicKeys",
+        "iam:ListServerCertificateTags",
+        "iam:ListServerCertificates",
+        "iam:ListServiceSpecificCredentials",
+        "iam:ListSigningCertificates",
+        "iam:ListVirtualMFADevices",
+        "kms:CreateAlias",
+        "kms:CreateKey",
+        "kms:ListAliases",
+        "kms:ListKeys",
+        "logs:DescribeLogGroups",
+        "logs:ListTagsLogGroup",
+        "s3:ListAllMyBuckets",
+        "servicequotas:ListAWSDefaultServiceQuotas",
+        "servicequotas:ListServiceQuotas",
+        "sts:DecodeAuthorizationMessage"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "BigAnimalBasePolicy"
+    },
+    {
+      "Action": [
+        "cloudwatch:DeleteDashboards",
+        "cloudwatch:GetDashboard",
+        "cloudwatch:PutDashboard"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:cloudwatch::*:dashboard/Customer*",
+      "Sid": "BigAnimalDashboardPolicy"
+    },
+    {
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeContinuousBackups",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:dynamodb:us-east-1:*:table/tf-state-dynamodb-table*",
+      "Sid": "BigAnimalDynamodbPolicy"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:Delete*",
+        "ec2:Detach*",
+        "ec2:Disassociate*",
+        "ec2:Modify*",
+        "ec2:Replace*",
+        "ec2:SearchLocalGatewayRoutes",
+        "ec2:SearchTransitGatewayRoutes",
+        "ec2:ReleaseAddress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:TerminateInstances",
+        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+        "ec2:UpdateSecurityGroupRuleDescriptionsEgress"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:ResourceTag/ManagedBy": "BigAnimal"
+        }
+      },
+      "Sid": "BigAnimalEC2UpdatePolicy"
+    },
+    {
+      "Action": [
+        "ecs:DescribeTasks",
+        "ecs:ListTasks"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:*:*:cluster/BigAnimal*"
+        }
+      },
+      "Sid": "BigAnimalECSReadTaskPolicy"
+    },
+    {
+      "Action": [
+        "ecs:TagResource"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:ecs:*:*:cluster/BigAnimal*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/ManagedBy": "BigAnimal"
+        }
+      },
+      "Sid": "BigAnimalECSTagPolicy"
+    },
+    {
+      "Action": [
+        "ecs:DeleteCluster",
+        "ecs:DescribeClusters"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:ecs:*:*:cluster/BigAnimal*",
+      "Sid": "BigAnimalECSClustersPolicy"
+    },
+    {
+      "Action": [
+        "ecs:RunTask"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:ecs:*:*:task-definition/dp*",
+        "arn:aws:ecs:*:*:task-definition/rr*"
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:*:*:cluster/BigAnimal*"
+        }
+      },
+      "Sid": "BigAnimalECSRunTaskPolicy"
+    },
+    {
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:iam::*:oidc-provider/oidc.eks.*.amazonaws.com*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/ManagedBy": "BigAnimal"
+        }
+      },
+      "Sid": "BigAnimalOpenIDConnectProviderPolicy"
+    },
+    {
+      "Action": [
+        "kms:CreateGrant",
+        "kms:DescribeKey",
+        "kms:EnableKeyRotation",
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+        "kms:ListResourceTags",
+        "kms:ScheduleKeyDeletion",
+        "kms:TagResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:kms:*:*:key/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/ManagedBy": "BigAnimal"
+        }
+      },
+      "Sid": "BigAnimalKMSPolicy"
+    },
+    {
+      "Action": [
+        "kms:DeleteAlias",
+        "kms:UpdateAlias"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:kms:*:*:key/*",
+        "arn:aws:kms:*:*:alias/kms-cmk-*"
+      ],
+      "Sid": "BigAnimalKMSAliasPolicy"
+    },
+    {
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DeleteLogGroup",
+        "logs:DeleteMetricFilter",
+        "logs:DescribeMetricFilters",
+        "logs:GetLogGroupFields",
+        "logs:PutLogEvents",
+        "logs:PutMetricFilter",
+        "logs:PutRetentionPolicy",
+        "logs:TagLogGroup",
+        "logs:UntagLogGroup"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:logs:*:*:log-group:/biganimal/*",
+        "arn:aws:logs:*:*:log-group:/biganimal/*:log-stream:*"
+      ],
+      "Sid": "BigAnimalLogsPolicy"
+    },
+    {
+      "Action": [
+        "ssm:AddTagsToResource",
+        "ssm:DeleteParameters",
+        "ssm:GetParameters",
+        "ssm:GetParameter",
+        "ssm:PutParameter"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:ssm:*:*:parameter/BA_*",
+      "Sid": "BigAnimalSystemsManagerParameterStorePolicy"
+    },
+    {
+      "Action": "secretsmanager:*",
+      "Effect": "Allow",
+      "Resource": "arn:aws:secretsmanager:*:*:secret:BA*",
+      "Sid": "BigAnimalSecretsPolicy"
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:DeleteBucket",
+        "s3:DeleteBucketLifecycle",
+        "s3:DeleteBucketPolicy",
+        "s3:DescribeJob",
+        "s3:Get*",
+        "s3:List*",
+        "s3:PutBucketAcl",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketTagging",
+        "s3:PutBucketVersioning",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutObject"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::pg-*",
+        "arn:aws:s3:::pg-*/*",
+        "arn:aws:s3:::tf-state-*",
+        "arn:aws:s3:::tf-state-*/*",
+        "arn:aws:s3:::logs-bucket-*",
+        "arn:aws:s3:::logs-bucket-*/*",
+        "arn:aws:s3:::metrics-bucket-*",
+        "arn:aws:s3:::metrics-bucket-*/*"
+      ],
+      "Sid": "BigAnimalS3Policy"
+    },
+    {
+      "Action": [
+        "s3:CreateBucket"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::pg-*",
+        "arn:aws:s3:::tf-state-*",
+        "arn:aws:s3:::logs-bucket-*",
+        "arn:aws:s3:::metrics-bucket-*"
+      ],
+      "Sid": "BigAnimalS3BucketPolicy"
+    }
+  ]
+}

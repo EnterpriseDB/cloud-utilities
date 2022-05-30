@@ -1,0 +1,89 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AttachInternetGateway",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:Delete*",
+        "ec2:Detach*",
+        "ec2:Disassociate*",
+        "ec2:Modify*",
+        "ec2:Replace*",
+        "ec2:SearchLocalGatewayRoutes",
+        "ec2:SearchTransitGatewayRoutes",
+        "ec2:ReleaseAddress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:TerminateInstances"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/aws:eks:cluster-name": "dp-##EXTERNAL_ID##-*"
+        }
+      },
+      "Sid": "BigAnimalEKSEC2InstancesPolicy"
+    },
+    {
+      "Action": [
+        "eks:DeleteAddon",
+        "eks:DeleteCluster",
+        "eks:DeleteNodegroup",
+        "eks:TagResource",
+        "eks:UntagResource",
+        "eks:UpdateAddon",
+        "eks:UpdateClusterVersion",
+        "eks:UpdateNodegroupConfig",
+        "eks:UpdateNodegroupVersion"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:eks:*:*:cluster/dp-##EXTERNAL_ID##-*",
+        "arn:aws:eks:*:*:nodegroup/dp-##EXTERNAL_ID##-*/*/*",
+        "arn:aws:eks:*:*:addon/dp-##EXTERNAL_ID##-*/*/*"
+      ],
+      "Sid": "BigAnimalEKSUpdatePolicy"
+    },
+    {
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:CreatePolicy",
+        "iam:CreateRole",
+        "iam:DeletePolicy",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:TagPolicy",
+        "iam:TagRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
+        "arn:aws:iam::*:role/biganimal-role-*",
+        "arn:aws:iam::*:policy/biganimal-policy-*",
+        "arn:aws:iam::*:policy/*##EXTERNAL_ID##*",
+        "arn:aws:iam::*:policy/AmazonEKS*"
+      ],
+      "Sid": "BigAnimalIAMPolicy"
+    },
+    {
+      "Action": [
+        "iam:PassRole",
+        "logs:FilterLogEvents"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
+        "arn:aws:iam::*:role/biganimal-##ROLE_SUFFIX##",
+        "arn:aws:logs:*:*:log-group:/ecs/ba-bootstrap:log-stream:"
+      ],
+      "Sid": "BigAnimalECSTaskPassRolePolicy"
+    }
+  ]
+}

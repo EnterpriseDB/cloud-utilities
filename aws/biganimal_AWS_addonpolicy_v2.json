@@ -22,7 +22,7 @@
             "Resource": "*",
             "Condition": {
                 "StringLike": {
-                    "ec2:ResourceTag/aws:eks:cluster-name": "dp-##ORG_ID##-*"
+                    "ec2:ResourceTag/aws:eks:cluster-name": "dp-##EXTERNAL_ID##-*"
                 }
             },
             "Sid": "BigAnimalEKSEC2InstancesPolicy"
@@ -39,9 +39,9 @@
             ],
             "Effect": "Allow",
             "Resource": [
-                "arn:aws:eks:*:*:cluster/dp-##ORG_ID##-*",
-                "arn:aws:eks:*:*:nodegroup/dp-##ORG_ID##-*/*/*",
-                "arn:aws:eks:*:*:addon/dp-##ORG_ID##-*/*/*"
+                "arn:aws:eks:*:*:cluster/dp-##EXTERNAL_ID##-*",
+                "arn:aws:eks:*:*:nodegroup/dp-##EXTERNAL_ID##-*/*/*",
+                "arn:aws:eks:*:*:addon/dp-##EXTERNAL_ID##-*/*/*"
             ],
             "Sid": "BigAnimalEKSUpdatePolicy"
         },
@@ -64,10 +64,10 @@
             ],
             "Effect": "Allow",
             "Resource": [
-                "arn:aws:iam::*:role/ba-##ORG_ID##-*",
+                "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
                 "arn:aws:iam::*:role/biganimal-role-*",
                 "arn:aws:iam::*:policy/biganimal-policy-*",
-                "arn:aws:iam::*:policy/*##ORG_ID##*",
+                "arn:aws:iam::*:policy/*##EXTERNAL_ID##*",
                 "arn:aws:iam::*:policy/AmazonEKS*"
             ],
             "Sid": "BigAnimalIAMPolicy"
@@ -79,7 +79,7 @@
             ],
             "Effect": "Allow",
             "Resource": [
-                "arn:aws:iam::*:role/ba-##ORG_ID##-*",
+                "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
                 "arn:aws:iam::*:role/biganimal-##ROLE_SUFFIX##",
                 "arn:aws:logs:*:*:log-group:/ecs/ba-bootstrap:log-stream:"
             ],

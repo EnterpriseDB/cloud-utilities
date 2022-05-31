@@ -65,7 +65,6 @@
                 "kms:CreateKey",
                 "kms:ListAliases",
                 "kms:ListKeys",
-                "kms:ListResourceTags",
                 "logs:DescribeLogGroups",
                 "logs:ListTagsLogGroup",
                 "s3:ListAllMyBuckets",
@@ -200,13 +199,28 @@
         {
             "Action": [
                 "kms:CreateGrant",
-                "kms:DeleteAlias",
                 "kms:DescribeKey",
                 "kms:EnableKeyRotation",
                 "kms:GetKeyPolicy",
                 "kms:GetKeyRotationStatus",
+                "kms:ListResourceTags",
                 "kms:ScheduleKeyDeletion",
-                "kms:TagResource",
+                "kms:TagResource"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:kms:*:*:key/*"
+            ],
+            "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/ManagedBy": "BigAnimal"
+                }
+            },
+            "Sid": "BigAnimalKMSPolicy"
+        },
+        {
+            "Action": [
+                "kms:DeleteAlias",
                 "kms:UpdateAlias"
             ],
             "Effect": "Allow",
@@ -214,7 +228,7 @@
                 "arn:aws:kms:*:*:key/*",
                 "arn:aws:kms:*:*:alias/kms-cmk-*"
             ],
-            "Sid": "BigAnimalKMSPolicy"
+            "Sid": "BigAnimalKMSAliasPolicy"
         },
         {
             "Action": [

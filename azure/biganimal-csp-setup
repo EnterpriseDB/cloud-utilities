@@ -145,7 +145,7 @@ function check_az_version {
   # refer https://docs.microsoft.com/en-us/cli/azure/microsoft-graph-migration#install-a-previous-version"
   vercomp "${version}" 2.37.0
   if [ $? -lt 2 ]; then
-    suggest "Error: this script only supports azure-cli >= 2.30.1 and < 2.37.0" alert
+    suggest "Error: this script only supports azure-cli >= 2.31.0 and < 2.37.0" alert
     exit 1
   fi
   set -e

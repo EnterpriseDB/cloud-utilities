@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Copyright 2021 EnterpriseDB Corporation
+# Copyright 2021,2022 EnterpriseDB Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -72,28 +72,90 @@ show_help()
 check()
 {
   # jq is required.
-  hash jq > /dev/null 2>&1 || { show_help; echo "Error: please install jq on the system"; }
+  hash jq > /dev/null 2>&1 || { show_help; suggest "Error: please install jq on the system" alert; }
   check_az_version
   check_display_name
   check_subscription
 }
 
+suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m'
+    if [ "$highlight" = 'alert' ]; then
+        echo -e "${RED}${what}${NC}"
+    else
+        echo -e "${GREEN}${what}${NC}"
+    fi
+}
+
+# refer from
+# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
+vercomp () {
+    if [[ $1 == $2 ]]
+    then
+        return 0
+    fi
+    local IFS=.
+    local i ver1=($1) ver2=($2)
+    # fill empty fields in ver1 with zeros
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
+    do
+        ver1[i]=0
+    done
+    for ((i=0; i<${#ver1[@]}; i++))
+    do
+        if [[ -z ${ver2[i]} ]]
+        then
+            # fill empty fields in ver2 with zeros
+            ver2[i]=0
+        fi
+        if ((10#${ver1[i]} > 10#${ver2[i]}))
+        then
+            return 1
+        fi
+        if ((10#${ver1[i]} < 10#${ver2[i]}))
+        then
+            return 2
+        fi
+    done
+    return 0
+}
+
 #### Check Azure CLI version
 function check_az_version {
+  set +e
   version=$(az version --query \"azure-cli\" -o tsv)
   if command -v clouddrive &> /dev/null; then
     echo "Run Azure CSP setup with azure-cli ${version} in Azure Cloud shell"
   else
-    [[ "${version}" =~ ^2.30.* ]] && suggest "alert" "error: upgrade azure-cli to 2.31.0 or later" && exit 1
+    # only support azure-cli >= 2.31.0 and < 2.37.0
+    vercomp "${version}" 2.31.0
+    if [ $? -eq 2 ]; then
+      suggest "Error: this script only supports azure-cli >= 2.31.0 and < 2.37.0" alert
+      exit 1
+    fi
     echo "Run Azure CSP setup with azure-cli ${version}"
   fi
+
+  # refer https://docs.microsoft.com/en-us/cli/azure/microsoft-graph-migration#install-a-previous-version"
+  vercomp "${version}" 2.37.0
+  if [ $? -lt 2 ]; then
+    suggest "Error: this script only supports azure-cli >= 2.31.0 and < 2.37.0" alert
+    exit 1
+  fi
+  set -e
 }
 
 check_display_name()
 {
   if [[ "${display_name}" == "" ]]; then
     show_help
-    echo "Error: missing -d, --display-name to specify Azure AD App name"
+    suggest "Error: missing -d, --display-name to specify Azure AD App name" alert
     exit 1
   fi
 }
@@ -102,7 +164,7 @@ check_subscription()
 {
   if [[ "${subscription}" == "" ]]; then
     show_help
-    echo "Error: missing -s, --subscription to specify Azure Subscription"
+    suggest "Error: missing -s, --subscription to specify Azure Subscription" alert
     exit 1
   fi
 }
@@ -111,7 +173,7 @@ check_years()
 {
   if [[ "${years}" == "" ]]; then
     show_help
-    echo "Error: -y, --years should have a value"
+    suggest "Error: -y, --years should have a value" alert
     exit 1
   fi
 }

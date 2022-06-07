@@ -133,10 +133,10 @@ function check_az_version {
   if command -v clouddrive &> /dev/null; then
     echo "Run Azure CSP setup with azure-cli ${version} in Azure Cloud shell"
   else
-    # only support azure-cli >= 2.31.0 and < 2.37.0
+    # only support azure-cli >= 2.31.0
     vercomp "${version}" 2.31.0
     if [ $? -eq 2 ]; then
-      suggest "Error: this script only supports azure-cli >= 2.31.0 and < 2.37.0" alert
+      suggest "Error: this script only supports azure-cli >= 2.31.0" alert
       exit 1
     fi
     echo "Run Azure CSP setup with azure-cli ${version}"

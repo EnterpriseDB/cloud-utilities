@@ -61,7 +61,7 @@ function show_help()
     echo "Options:"
     echo "    -h, --help                  Print this help message"
     echo "    -i, --instance-type         Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
-    echo "    -a, --high-availability     Plan for BigAnimal cluster with High Availability enabled"
+    echo "    -a, --high-availability     *DEPRECATED* - Plan for BigAnimal cluster with High Availability enabled"
     echo "    -x, --cluster-architecture  Defines the Cluster architecture and can be [ single | ha | eha ]"
     echo "    -e, --endpoint              Network endpoint flavor for BigAnimal cluster"
     echo "    -r, --activate-region       Include region activation, if no clusters exist in region"
@@ -74,6 +74,9 @@ function show_help()
     echo "    $0 -i e2s_v3 -x single -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
     echo "    $0 -i e2s_v3 -x ha -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
     echo "    $0 -i e2s_v3 -x eha -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo
+    echo "Deprecations:"
+    echo "    -a, --high-availability is DEPRECATED, please use -x, --cluster-architecture in its place"
     echo
     echo "Available regions are: "
     echo "  ${AVAILABLE_REGIONS[@]}"

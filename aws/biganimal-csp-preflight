@@ -57,7 +57,7 @@ function show_help()
     echo "Options:"
     echo "    -h, --help                  Print this help message"
     echo "    -i, --instance-type         AWS Instance Type for BigAnimal cluster, e.g., r5.large"
-    echo "    -a, --high-availability     Plan for BigAnimal cluster with High Availability enabled"
+    echo "    -a, --high-availability     *DEPRECATED* - Plan for BigAnimal cluster with High Availability enabled"
     echo "    -x, --cluster-architecture  Defines the Cluster architecture and can be [ single | ha | eha ]"
     echo "    -e, --endpoint              Network endpoint flavor for BigAnimal cluster"
     echo "    -r, --activate-region       Include region activation, if no clusters exist in region"
@@ -68,6 +68,9 @@ function show_help()
     echo "Examples:"
     echo "    $0 --onboard 123456789012 us-east-1"
     echo "    $0 -i r5.2xlarge --high-availability -e private -r 123456789012 us-east-1"
+    echo
+    echo "Deprecations:"
+    echo "    -a, --high-availability is DEPRECATED, please use -x, --cluster-architecture in its place"
     echo
     echo "Available regions are: "
     echo -e "  ${GREEN}${AVAILABLE_REGIONS[@]}${NC}"

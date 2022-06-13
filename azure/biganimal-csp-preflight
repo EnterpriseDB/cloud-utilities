@@ -301,6 +301,9 @@ eha_proxy_vm_family="Standard Dv4 Family"
 eha_proxy_instance_type_info=($(_extract_instancetype_info "$eha_proxy_vm_type"))
 pg_eha_proxy_vm_vcpu=${eha_proxy_instance_type_info[0]}
 
+# set the architecture based on parameters architecture and ha (deprecated)
+[ "$architecture" = "single" ] && [ "$ha" = "true" ] && architecture="ha"
+
 function infra_vcpus()
 {
     # 14 are the vCPU required by management VMs
@@ -315,10 +318,8 @@ function need_public_ip()
 function need_pg_vcpus_for()
 {
     local vcpu=$1
-    local ha=$2
-    local architecture=$3
+    local architecture=$2
     local replica=1
-    [ "$ha" = "true" ] && replica=3
     [ "$architecture" = "ha" ] && replica=3
     [ "$architecture" = "eha" ] && replica=5
 
@@ -611,7 +612,7 @@ free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
 need_mgmt_vcpus=$(infra_vcpus)
-need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$ha" "$architecture")
+need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
 need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
 need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
 need_publicip_standard=$(need_public_ip)

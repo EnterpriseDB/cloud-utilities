@@ -23,6 +23,7 @@
 #   - (mandatory) region
 #   - PostgreSQL cluster's instance type
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - whether the EHA (Extreme High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
 # it checks the below requirement:
 #   - the user is the 'owner' of the Azure subscription
@@ -42,6 +43,9 @@
 #  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
 #
 set -e
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 [ "${BASH_VERSINFO:-0}" -lt 4 ] && echo "This script does not support Bash version 3 and below" && show_help && exit 1
 
 NEEDS_QUOTA_INCREASE="false"
@@ -51,22 +55,28 @@ function show_help()
     echo "Usage: $0 [options] <target-subscription> <region>"
     echo ""
     echo "Arguments:"
-    echo "    <target-subscription>    Azure subscription for BigAnimal deployment"
-    echo "    <region>                 Azure region for BigAnimal deployment"
+    echo "    <target-subscription>       Azure subscription for BigAnimal deployment"
+    echo "    <region>                    Azure region for BigAnimal deployment"
     echo
     echo "Options:"
-    echo "    -h, --help               Print this help message"
-    echo "    -i, --instance-type      Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
-    echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
-    echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
-    echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
-    echo "    --onboard                Check if the user and subscription are configured appropriately"
+    echo "    -h, --help                  Print this help message"
+    echo "    -i, --instance-type         Azure VM instance for BigAnimal cluster, e.g., e2s_v3"
+    echo "    -a, --high-availability     *DEPRECATED* - Plan for BigAnimal cluster with High Availability enabled"
+    echo "    -x, --cluster-architecture  Defines the Cluster architecture and can be [ single | ha | eha ]"
+    echo "    -e, --endpoint              Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region       Include region activation, if no clusters exist in region"
+    echo "    --onboard                   Check if the user and subscription are configured appropriately"
     echo
     echo "Behavior defaults to --onboard if no other options provided."
     echo
     echo "Examples:"
     echo "    $0 --onboard 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
-    echo "    $0 -i e2s_v3 --high-availability -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo "    $0 -i e2s_v3 -x single -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo "    $0 -i e2s_v3 -x ha -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo "    $0 -i e2s_v3 -x eha -e private 12412ab3d-1515-2217-96f5-0338184fcc04 eastus2"
+    echo
+    echo "Deprecations:"
+    echo "    -a, --high-availability is DEPRECATED, please use -x, --cluster-architecture in its place"
     echo
     echo "Available regions are: "
     echo "  ${AVAILABLE_REGIONS[@]}"
@@ -74,6 +84,18 @@ function show_help()
     echo "  ${AVAILABLE_INSTANCETYPE[@]}"
     echo "Available endpoint flavors are: "
     echo "  ${AVAILABLE_ENDPOINTS[@]}"
+}
+
+function suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    if [ "$highlight" = 'alert' ]; then
+        echo -e "${RED}${what}${NC}"
+    else
+        echo -e "${GREEN}${what}${NC}"
+    fi
 }
 
 AVAILABLE_ENDPOINTS=(
@@ -180,10 +202,11 @@ function _extract_instancetype_info()
     return 0
 }
 
-# Default values for trial onboarding
+# Default values for onboarding
 endpoint="public"
 instance_type="e2s_v3"
 ha=false
+architecture="single"
 activate=false
 onboard=false
 
@@ -205,6 +228,11 @@ while [[ $# -gt 0 ]]; do
     -a|--high-availability)
       ha=true
       shift # past argument
+      ;;
+    -x|--cluster-architecture)
+      architecture="$2"
+      shift # past argument
+      shift # past value
       ;;
     -r|--activate-region)
       activate=true
@@ -232,8 +260,12 @@ subscription=$1
 region=$2
 
 [ -z "$subscription" ] && show_help && exit 1
+[ "$ha" = "true" ] && [ "$architecture" != "single" ] \
+    && suggest "You can't pass both HA and cluster-architecture!" alert && show_help && exit 1
+[ "$architecture" != "single" ] && [ "$architecture" != "ha" ] && [ "$architecture" != "eha" ] \
+    && suggest "cluster-architecture can be only 'single', 'ha' or 'eha'!" alert && show_help && exit 1
 # set az cli account to the given subscription to validate it is valid
-az account set -s $subscription
+az account set -s "$subscription"
 
 [ -z "$region" ] && show_help && exit 1
 [[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
@@ -260,12 +292,21 @@ pg_vm_family="${instance_type_info[2]} ${instance_type_info[3]} ${instance_type_
     && exit 1
 
 # hardcode management workload used VM instance type info
-mgmt_vm_vcpu=2
 mgmt_vm_type="Standard_D2_v4"
 mgmt_vm_family="Standard Dv4 Family"
 
+# hardcode EHA proxy workload used VM instance type info
+eha_proxy_vm_type="Standard_D2_v4"
+eha_proxy_vm_family="Standard Dv4 Family"
+eha_proxy_instance_type_info=($(_extract_instancetype_info "$eha_proxy_vm_type"))
+pg_eha_proxy_vm_vcpu=${eha_proxy_instance_type_info[0]}
+
+# set the architecture based on parameters architecture and ha (deprecated)
+[ "$architecture" = "single" ] && [ "$ha" = "true" ] && architecture="ha"
+
 function infra_vcpus()
 {
+    # 14 are the vCPU required by management VMs
     [ "$activate" = "true" ] && echo 14 || echo 0
 }
 
@@ -277,9 +318,20 @@ function need_public_ip()
 function need_pg_vcpus_for()
 {
     local vcpu=$1
-    local ha=$2
+    local architecture=$2
     local replica=1
-    [ "$ha" = "true" ] && replica=3
+    [ "$architecture" = "ha" ] && replica=3
+    [ "$architecture" = "eha" ] && replica=5
+
+    echo $((vcpu*replica))
+}
+
+function need_pg_eha_proxy_vcpus_for()
+{
+    local vcpu=$1
+    local architecture=$2
+    local replica=0
+    [ "$architecture" = "eha" ] && replica=3
 
     echo $((vcpu*replica))
 }
@@ -294,7 +346,7 @@ function _onexit {
   echo "# Overall Suggestions #"
   echo "#######################"
   echo ""
-  cat $TMP_SUGGESTION
+  cat "$TMP_SUGGESTION"
 
   echo ""
   echo "Please open a ticket to Azure if need to raise quota limit."
@@ -313,26 +365,11 @@ TMP_NW_OUTPUT=$TMPDIR/ip_$$
 TMP_SKU_OUTPUT=$TMPDIR/sku_$$
 TMP_PROVIDER_OUTPUT=$TMPDIR/provider_$$
 TMP_SUGGESTION=$TMPDIR/suggestions_$$
-touch $TMP_SUGGESTION
-
-function suggest()
-{
-    local what=$1
-    local highlight=$2
-
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    NC='\033[0m'
-    if [ "$highlight" = 'alert' ]; then
-        echo -e "${RED}${what}${NC}"
-    else
-        echo -e "${GREEN}${what}${NC}"
-    fi
-}
+touch "$TMP_SUGGESTION"
 
 function store_suggestion()
 {
-    echo "$1" >> $TMP_SUGGESTION
+    echo "$1" >> "$TMP_SUGGESTION"
 }
 
 #### Check Azure CLI version
@@ -381,6 +418,12 @@ function check_az_version {
       suggest "Error: this script only supports azure-cli >= 2.31.0" alert
       exit 1
     fi
+    # check if we are running azure-cli >= 2.37.0
+    msgraphapi=true
+    vercomp "${version}" 2.37.0
+    if [ $? -eq 2 ]; then
+      msgraphapi=false
+    fi
     set -e
     echo "Run Azure Preflight Checks with azure-cli ${version}"
   fi
@@ -388,18 +431,18 @@ function check_az_version {
 check_az_version
 
 function validate_subscription() {
-  state=$(echo $1 | jq -r .state)
+  state=$(echo "$1" | jq -r .state)
   if [ "$state" != "Enabled" ]; then
     store_suggestion "Azure subscription $subscription state should be Enabled"
   fi
-  tenant_id=$(echo $account | jq -r .tenantId)
+  tenant_id=$(echo "$account" | jq -r .tenantId)
   store_suggestion "Make sure the tenant $tenant_id is the same as the one provided to EDB"
 }
 
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
-  user_name=$(echo $1 | jq -r .userPrincipalName)
-  count=$(az role assignment list --assignee $user_name --include-groups --include-inherited --role Owner -o json --only-show-errors | jq length)
+  user_name=$(echo "$1" | jq -r .userPrincipalName)
+  count=$(az role assignment list --assignee "${user_name//\#/%23}" --include-groups --include-inherited --role Owner -o json --only-show-errors | jq length)
   if [ "$count" = "0" ]; then
     store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
   fi
@@ -407,15 +450,20 @@ function validate_role_assignment() {
 
 #### Azure User Type Checking
 function validate_user_type() {
-  user_type=$(echo $1 | jq -r .userType)
-  if [ "$user_type" != "Member" ]; then
-    store_suggestion "Current user is a $user_type user, not Member user"
+  # The following check starting from Azure CLI 2.37 is skipped due to https://github.com/Azure/azure-cli/issues/22580
+  # and https://github.com/Azure/azure-cli/issues/22636#issuecomment-1138823356
+  # until this feature will be delivered into MS Graph APIs
+  if [ "$msgraphapi" = "false" ]; then
+    user_type=$(echo "$1" | jq -r .userType)
+    if [ "$user_type" != "Member" ]; then
+      store_suggestion "Current user is a $user_type user, not Member user"
+    fi
   fi
 }
 
 function check_onboard() {
   #### Azure Subscription Checking
-  account=$(az account show -s $subscription -o json)
+  account=$(az account show -s "$subscription" -o json)
   signed_in_user=$(az ad signed-in-user show -o json --only-show-errors)
   validate_subscription "$account"
   validate_role_assignment "$signed_in_user"
@@ -458,7 +506,7 @@ echo "#######################"
 echo "# Provider            #"
 echo "#######################"
 echo ""
-az provider list -o table > $TMP_PROVIDER_OUTPUT
+az provider list -o table > "$TMP_PROVIDER_OUTPUT"
 
 # print the provider checking result
 FMT="%-40s %-21s %-20b %-s\n"
@@ -480,20 +528,20 @@ done
 
 if [ $unavail = "true" ]; then
     store_suggestion "Register all required providers before continue"
-    cat $TMP_SUGGESTION
+    cat "$TMP_SUGGESTION"
     exit 1
 fi
 
 function get_sku_zone_for()
 {
     local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{print $4}'
+    awk "/ $what /" "$TMP_SKU_OUTPUT" | awk '{print $4}'
 }
 
 function get_sku_restriction_for()
 {
     local what=$1
-    awk "/ $what /" $TMP_SKU_OUTPUT | awk '{$1=$2=$3=$4=""; print $0}' | xargs
+    awk "/ $what /" "$TMP_SKU_OUTPUT" | awk '{$1=$2=$3=$4=""; print $0}' | xargs
 }
 
 function sku_suggest()
@@ -515,41 +563,42 @@ echo "#######################"
 echo ""
 vmsku_mgmt=$mgmt_vm_type
 vmsku_pg=$pg_vm_type
-az vm list-skus -l $region --all -o table > $TMP_SKU_OUTPUT
-sku_restriction_mgmt=$(get_sku_restriction_for ${vmsku_mgmt})
-sku_restriction_pg=$(get_sku_restriction_for ${vmsku_pg})
+az vm list-skus -l "$region" --all -o table > "$TMP_SKU_OUTPUT"
+sku_restriction_mgmt=$(get_sku_restriction_for "${vmsku_mgmt}")
+sku_restriction_pg=$(get_sku_restriction_for "${vmsku_pg}")
 
 # print region Azure VM SKU checking result
 FMT="%-17s %-22s %-23s %-8s %-b\n"
 printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
-printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for ${vmsku_mgmt})" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
-printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for ${vmsku_pg})" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for "${vmsku_mgmt}")" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
+printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for "${vmsku_pg}")" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
 
 echo ""
 echo "#######################"
 echo "# Quota Limitation    #"
 echo "#######################"
 echo ""
-az vm list-usage -l $region -o table > $TMP_VM_OUTPUT
-az network list-usages -l $region -o table > $TMP_NW_OUTPUT || true
+az vm list-usage -l "$region" -o table > "$TMP_VM_OUTPUT"
+az network list-usages -l "$region" -o table > "$TMP_NW_OUTPUT" || true
 
 # parse VM usage
 function get_vm_usage_for()
 {
     local what=$1
-    < $TMP_VM_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
+    < "$TMP_VM_OUTPUT" grep "${what}" | awk '{print $(NF-1)" "$NF}'
 }
 
 regional_vcpus=($(get_vm_usage_for "Total Regional vCPUs"))
 mgmt_vcpus=($(get_vm_usage_for "$mgmt_vm_family vCPUs"))
 pg_vcpus=($(get_vm_usage_for "$pg_vm_family vCPUs"))
+pg_eha_proxy_vcpus=($(get_vm_usage_for "$eha_proxy_vm_family vCPUs"))
 
 # parse network usage
 function get_nw_usage_for()
 {
     local what=$1
-    < $TMP_NW_OUTPUT grep "${what}" | awk '{print $(NF-1)" "$NF}'
+    < "$TMP_NW_OUTPUT" grep "${what}" | awk '{print $(NF-1)" "$NF}'
 }
 
 publicip_standard=($(get_nw_usage_for "Public IP Addresses - Standard"))
@@ -558,18 +607,26 @@ publicip_standard=($(get_nw_usage_for "Public IP Addresses - Standard"))
 free_regional_vcpus=$((${regional_vcpus[1]} - ${regional_vcpus[0]}))
 free_mgmt_vcpus=$((${mgmt_vcpus[1]} - ${mgmt_vcpus[0]}))
 free_pg_vcpus=$((${pg_vcpus[1]} - ${pg_vcpus[0]}))
+free_pg_eha_proxy_vcpus=$((${pg_eha_proxy_vcpus[1]} - ${pg_eha_proxy_vcpus[0]}))
 free_publicip_standard=$((${publicip_standard[1]} - ${publicip_standard[0]}))
 
 # calculate required resources
 need_mgmt_vcpus=$(infra_vcpus)
-need_pg_vcpus=$(need_pg_vcpus_for $pg_vm_vcpu $ha)
-need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus))
+need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
+need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
 need_publicip_standard=$(need_public_ip)
+shared_mgmt_eha_proxy_vcpus=0
+
+if [ "$mgmt_vm_family" = "$eha_proxy_vm_family" ]; then
+    shared_mgmt_eha_proxy_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
+fi
 
 # calculate gap of "need - free"
-gap_mgmt_vcpus=$((free_mgmt_vcpus - need_mgmt_vcpus))
+gap_mgmt_vcpus=$((free_mgmt_vcpus - (shared_mgmt_eha_proxy_vcpus > need_mgmt_vcpus ? shared_mgmt_eha_proxy_vcpus : need_mgmt_vcpus) ))
 gap_pg_vcpus=$((free_pg_vcpus - need_pg_vcpus))
-gap_regional_vcpus=$((free_regional_vcpus - $need_regional_vcpus))
+gap_pg_eha_proxy_vcpus=$((free_pg_eha_proxy_vcpus - (shared_mgmt_eha_proxy_vcpus > need_pg_eha_proxy_vcpus ? shared_mgmt_eha_proxy_vcpus : need_pg_eha_proxy_vcpus) ))
+gap_regional_vcpus=$((free_regional_vcpus - need_regional_vcpus))
 gap_publicip_standard=$((free_publicip_standard - need_publicip_standard))
 
 function quota_suggest()
@@ -589,10 +646,13 @@ FMT="%-32s %-8s %-8s %-11s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Limit" "Used" "Available" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "-----" "----" "---------" "--------" "---" "----------"
 printf "$FMT" "Total Regional vCPUs" ${regional_vcpus[1]} ${regional_vcpus[0]} ${free_regional_vcpus} $need_regional_vcpus $gap_regional_vcpus "$(quota_suggest $gap_regional_vcpus "Total Regional vCPUs")"
+[ "$shared_mgmt_eha_proxy_vcpus" -gt 0 ] && need_mgmt_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
 printf "$FMT" "$mgmt_vm_family vCPUs" ${mgmt_vcpus[1]} ${mgmt_vcpus[0]} ${free_mgmt_vcpus} ${need_mgmt_vcpus} ${gap_mgmt_vcpus} "$(quota_suggest $gap_mgmt_vcpus "$mgmt_vm_family vCPUs")"
 printf "$FMT" "$pg_vm_family vCPUs" ${pg_vcpus[1]} ${pg_vcpus[0]} ${free_pg_vcpus} ${need_pg_vcpus} ${gap_pg_vcpus} "$(quota_suggest $gap_pg_vcpus "$pg_vm_family vCPUs")"
+[ "$shared_mgmt_eha_proxy_vcpus" -eq 0 ] && [ "$need_pg_eha_proxy_vcpus" -gt 0 ] && \
+printf "$FMT" "$eha_proxy_vm_family vCPUs" ${pg_eha_proxy_vcpus[1]} ${pg_eha_proxy_vcpus[0]} ${free_pg_eha_proxy_vcpus} ${need_pg_eha_proxy_vcpus} ${gap_pg_eha_proxy_vcpus} "$(quota_suggest $gap_pg_eha_proxy_vcpus "$eha_proxy_vm_family vCPUs")"
 printf "$FMT" "Public IP Addresses - Standard" ${publicip_standard[1]} ${publicip_standard[0]} ${free_publicip_standard} ${need_publicip_standard} ${gap_publicip_standard} "$(quota_suggest $gap_publicip_standard "Public IP Addresses - Standard")"
 
-if [ "${gap_regional_vcpus}" -lt 0 ] || [ "${gap_mgmt_vcpus}" -lt 0 ] || [ "${gap_pg_vcpus}" -lt 0 ] || [ "${gap_publicip_standard}" -lt 0 ]; then
+if [ "${gap_regional_vcpus}" -lt 0 ] || [ "${gap_mgmt_vcpus}" -lt 0 ] || [ "${gap_pg_vcpus}" -lt 0 ] || [ "${gap_pg_eha_proxy_vcpus}" -lt 0 ] || [ "${gap_publicip_standard}" -lt 0 ]; then
   NEEDS_QUOTA_INCREASE="true"
 fi

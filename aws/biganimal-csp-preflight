@@ -23,6 +23,7 @@
 #   - (mandatory) region
 #   - PostgreSQL cluster's instance type
 #   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - whether the EHA (Extreme High Availability) is used for the PostgreSQL cluster
 #   - network type (private, or public)
 # it checks the below requirement:
 #   - the AWS CLI is configured with access to the specified account ID
@@ -50,22 +51,26 @@ function show_help()
     echo -e "Usage: ${GREEN}$0 [options] <account-id> <region>${NC}"
     echo ""
     echo "Arguments:"
-    echo "    <account-id>             AWS account ID for BigAnimal deployment"
-    echo "    <region>                 AWS region for BigAnimal deployment"
+    echo "    <account-id>                AWS account ID for BigAnimal deployment"
+    echo "    <region>                    AWS region for BigAnimal deployment"
     echo
     echo "Options:"
-    echo "    -h, --help               Print this help message"
-    echo "    -i, --instance-type      AWS Instance Type for BigAnimal cluster, e.g., r5.large"
-    echo "    -a, --high-availability  Plan for BigAnimal cluster with high availability enabled"
-    echo "    -e, --endpoint           Network endpoint flavor for BigAnimal cluster"
-    echo "    -r, --activate-region    Include region activation, if no clusters exist in region"
-    echo "    --onboard                Check if the user and account are configured appropriately"
+    echo "    -h, --help                  Print this help message"
+    echo "    -i, --instance-type         AWS Instance Type for BigAnimal cluster, e.g., r5.large"
+    echo "    -a, --high-availability     *DEPRECATED* - Plan for BigAnimal cluster with High Availability enabled"
+    echo "    -x, --cluster-architecture  Defines the Cluster architecture and can be [ single | ha | eha ]"
+    echo "    -e, --endpoint              Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region       Include region activation, if no clusters exist in region"
+    echo "    --onboard                   Check if the user and account are configured appropriately"
     echo
     echo "Behavior defaults to --onboard if no other options provided."
     echo
     echo "Examples:"
     echo "    $0 --onboard 123456789012 us-east-1"
     echo "    $0 -i r5.2xlarge --high-availability -e private -r 123456789012 us-east-1"
+    echo
+    echo "Deprecations:"
+    echo "    -a, --high-availability is DEPRECATED, please use -x, --cluster-architecture in its place"
     echo
     echo "Available regions are: "
     echo -e "  ${GREEN}${AVAILABLE_REGIONS[@]}${NC}"
@@ -214,10 +219,11 @@ function _extract_instancetype_info()
     return 0
 }
 
-# Default values for trial onboarding
+# Default values for onboarding
 endpoint="public"
 instance_type="r5.large"
 ha=false
+architecture="single"
 activate=false
 onboard=false
 
@@ -239,6 +245,11 @@ while [[ $# -gt 0 ]]; do
     -a|--high-availability)
       ha=true
       shift # past argument
+      ;;
+    -x|--cluster-architecture)
+      architecture="$2"
+      shift # past argument
+      shift # past value
       ;;
     -r|--activate-region)
       activate=true
@@ -266,6 +277,10 @@ account=$1
 region=$2
 
 [ -z "$account" ] && suggest "<account-id> is a required option!" alert && show_help && exit 1
+[ "$ha" = "true" ] && [ "$architecture" != "single" ] \
+    && suggest "You can't pass both HA and cluster-architecture!" alert && show_help && exit 1
+[ "$architecture" != "single" ] && [ "$architecture" != "ha" ] && [ "$architecture" != "eha" ] \
+    && suggest "cluster-architecture can be only 'single', 'ha' or 'eha'!" alert && show_help && exit 1
 # check that the aws cli is configured to work with the given account and we have access to
 set +e
 current_account=$(aws sts get-caller-identity --no-cli-pager --query 'Account' --output text)
@@ -305,6 +320,13 @@ mgmt_vm_instances=3
 mgmt_vm_type="m5(a).large"
 mgmt_nat_gateways=3
 
+# hardcode EHA proxy workload used VM instance type info
+ehaproxy_vm_type="m5(a).large"
+pg_eha_proxy_vm_vcpu=2
+
+# set the architecture based on parameters architecture and ha (deprecated)
+[ "$architecture" = "single" ] && [ "$ha" = "true" ] && architecture="ha"
+
 function infra_vcpus()
 {
     [ "$activate" = "true" ] && echo $((mgmt_vm_vcpu*mgmt_vm_instances)) || echo 0
@@ -323,9 +345,20 @@ function need_vpc()
 function need_pg_vcpus_for()
 {
     local vcpu=$1
-    local ha=$2
+    local architecture=$2
     local replica=1
-    [ "$ha" = "true" ] && replica=3
+    [ "$architecture" = "ha" ] && replica=3
+    [ "$architecture" = "eha" ] && replica=5
+
+    echo $((vcpu*replica))
+}
+
+function need_pg_eha_proxy_vcpus_for()
+{
+    local vcpu=$1
+    local architecture=$2
+    local replica=0
+    [ "$architecture" = "eha" ] && replica=3
 
     echo $((vcpu*replica))
 }
@@ -452,11 +485,17 @@ nlb_quota=$(aws service-quotas get-service-quota --region "$region" --service-co
 
 # calculate required resources
 need_mgmt_vcpus=$(infra_vcpus)
-need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$ha")
-need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus))
+need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
+need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
 need_eip=$(need_public_ip)
 need_vpc=$(need_vpc)
 need_nlb=1
+shared_mgmt_eha_proxy_vcpus=0
+
+if [ "$mgmt_vm_type" = "$ehaproxy_vm_type" ]; then
+    shared_mgmt_eha_proxy_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
+fi
 
 # calculate gap of "quota - used - need" (that corresponds to "available - need")
 gap_regional_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_regional_vcpus))
@@ -481,13 +520,16 @@ function quota_suggest()
 FMT="%-21s %-37s %-8s %-8s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
+[ "$shared_mgmt_eha_proxy_vcpus" -gt 0 ] && need_mgmt_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
 printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code[1]%(*}instances" "${cpu_quota%.*}")"
 printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code[1]%(*}instances" "${cpu_quota%.*}")"
+[ "$shared_mgmt_eha_proxy_vcpus" -eq 0 ] && [ "$need_pg_eha_proxy_vcpus" -gt 0 ] && \
+printf "$FMT" "$ehaproxy_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_eha_proxy_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code[1]%(*}instances" "${cpu_quota%.*}")"
 printf "$FMT" "Elastic IP Addresses" "${eip_quota_code[1]}" ${eip_quota%.*} ${eip_usage} ${need_eip} ${gap_eip} "$(quota_suggest $gap_eip "${eip_quota_code[1]}" "${eip_quota%.*}")"
 printf "$FMT" "VPCs" "${vpc_quota_code[1]}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code[1]}" "${vpc_quota%.*}")"
 printf "$FMT" "NLBs" "${nlb_quota_code[1]}" ${nlb_quota%.*} ${nlb_usage%.*} ${need_nlb} ${gap_nlb} "$(quota_suggest $gap_nlb "${nlb_quota_code[1]}" "${nlb_quota%.*}")"
 echo ""
-echo "Note: the first two Instance Types are referring to the same AWS Service Quota."
+echo "Note: the listed Instance Types are referring to the same AWS Service Quota."
 
 # exporting JSON report of needed service quota increases
 declare -A suggested_quota_increases

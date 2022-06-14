@@ -81,6 +81,7 @@
                 "eks:UntagResource",
                 "eks:UpdateAddon",
                 "eks:UpdateNodegroupConfig",
+                "eks:UpdateNodegroupVersion",
                 "iam:AttachRolePolicy",
                 "iam:CreateOpenIDConnectProvider",
                 "iam:CreatePolicy",

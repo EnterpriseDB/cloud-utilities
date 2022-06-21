@@ -277,6 +277,9 @@ do_create_iam_policy()
       --output json > "${TMPDIR}"/biganimal_createpolicy_output.json
     policy_arn=$(jq -r '.Policy.Arn' "${TMPDIR}"/biganimal_createpolicy_output.json)
   fi
+
+  # add the tag to the policy
+  aws iam tag-policy --policy-arn "${policy_arn}" --tags Key=ManagedBy,Value=BigAnimal
 }
 
 create_iam_role()
@@ -369,6 +372,9 @@ EOF
     echo -e "Attaching AWS IAM policy ${GREEN}biganimal-addon-${suffix_policy_name}${NC} to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
     aws iam attach-role-policy --policy-arn "$addon_policy_arn" --role-name "biganimal-$suffix_role_name"
   fi
+
+  # add the tag to the IAM role
+  aws iam tag-role --role-name "biganimal-$suffix_role_name" --tags Key=ManagedBy,Value=BigAnimal
 
   # create ECS, EKS and ELB service linked roles if not exists
   set +e

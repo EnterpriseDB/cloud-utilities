@@ -85,9 +85,11 @@
                 "iam:AttachRolePolicy",
                 "iam:CreateOpenIDConnectProvider",
                 "iam:CreatePolicy",
+                "iam:CreatePolicyVersion",
                 "iam:CreateRole",
                 "iam:DeleteOpenIDConnectProvider",
                 "iam:DeletePolicy",
+                "iam:DeletePolicyVersion",
                 "iam:DeleteRole",
                 "iam:DeleteRolePolicy",
                 "iam:DetachRolePolicy",
@@ -122,6 +124,7 @@
                 "iam:ListSSHPublicKeys",
                 "iam:ListVirtualMFADevices",
                 "iam:PutRolePolicy",
+                "iam:SetDefaultPolicyVersion",
                 "iam:TagOpenIDConnectProvider",
                 "iam:TagPolicy",
                 "iam:TagRole",
@@ -194,8 +197,8 @@
             ],
             "Effect": "Allow",
             "Resource": [
-                "arn:aws:iam::*:role/ba-aA1bB2cC3dD4eE5f-*",
-                "arn:aws:iam::*:role/biganimal-role",
+                "arn:aws:iam::*:role/ba-${external_id}-*",
+                "arn:aws:iam::*:role/biganimal-${suffix_role_name}",
                 "arn:aws:logs:*:*:log-group:/ecs/ba-bootstrap:log-stream:"
             ],
             "Sid": "BigAnimalECSTaskPolicy"

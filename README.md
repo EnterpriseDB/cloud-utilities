@@ -1,4 +1,4 @@
-# Cloud utilities
+# Cloud Utilities
 
 This repository contains utilities and scripts to help on using [BigAnimal][1]
 
@@ -10,7 +10,7 @@ where the scripts provided in this repository are used:
 - [jq][3]
 - [azure cli][4] v2.26 or above (if runs against Azure)
 - [aws-cli][6] v.2.3.0 or above (if runs against AWS)
-- [BASH] [8] AWS preflight scripts require BASH 4 or newer the default in MACOS is 3.x
+- [BASH][8] AWS preflight scripts require BASH 4 or newer the default in macOS is 3.x
 
 All 4 of these can be installed using the guides noted at the end of this dock or using homebrew.
 
@@ -28,13 +28,6 @@ Azure subscription readiness for running the BigAnimal by:
 
 It calls to Azure CLI and queries some specific resource types and check if there is
 still available resources can be allocated for the dedicated use by BigAnimal.
-
-### Get Token for BigAnimal API
-
-[get-token.sh](./api/get-token.sh) is a script to obtain a token for accessing
-the [BigAnimal API][2].
-
-For more details about BigAnimal API, please refer to [Using the BigAnimal API][5]
 
 ### Create a Azure AD SPN for BigAnimal Signup
 
@@ -64,6 +57,12 @@ You can find an easy readable version (pretty print) of both the IAM policy and 
 IAM Trust Policy applied to the created IAM role here:
 [biganimal_AWS_basepolicy.json](./aws/biganimal_AWS_basepolicy.json)
 [biganimal_AWS_trustpolicy](./aws/biganimal_AWS_trustpolicy.json)
+
+## BigAnimal API Scripts
+
+[get-token.sh](./api/get-token.sh) is a script to obtain a token for accessing the [BigAnimal API][2].
+
+For more details about BigAnimal API, please refer to [Using the BigAnimal API][5]
 
 [1]: https://www.enterprisedb.com/docs/biganimal/latest/
 [2]: https://portal.biganimal.com/api/docs/

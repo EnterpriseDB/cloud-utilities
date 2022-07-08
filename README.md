@@ -12,14 +12,13 @@ where the scripts provided in this repository are used:
 - [aws-cli][6] v.2.3.0 or above (if runs against AWS)
 - [BASH] [8] AWS preflight scripts require BASH 4 or newer the default in MACOS is 3.x
 
-All 4 of these can be installed using the guides noted at the end of this dock or using homebrew. 
+All 4 of these can be installed using the guides noted at the end of this dock or using homebrew.
 
 ## Azure Scripts
 
 ### Check Azure subscription readiness for running BigAnimal
 
-[biganimal-csp-preflight](./azure/biganimal-csp-preflight) (old version was
-[biganimal-preflight-azure](./azure/biganimal-preflight-azure)) is a script used to check the
+[biganimal-csp-preflight](./azure/biganimal-csp-preflight) is a script used to check the
 Azure subscription readiness for running the BigAnimal by:
 
 - if your any of your Azure provider has not been registered
@@ -39,9 +38,8 @@ For more details about BigAnimal API, please refer to [Using the BigAnimal API][
 
 ### Create a Azure AD SPN for BigAnimal Signup
 
-[biganimal-csp-setup](./azure/biganimal-csp-setup) (old version was
-[create-spn.sh](./azure/create-spn.sh)) is a script used to create a SPN with enough
-permissions. The output can be used in BigAnimal Signup page.
+[biganimal-csp-setup](./azure/biganimal-csp-setup) is a script used to create
+a SPN with enough permissions. The output can be used in BigAnimal Signup page.
 
 ## AWS Scripts
 

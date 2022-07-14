@@ -107,6 +107,7 @@ AVAILABLE_REGIONS=(
     australiaeast
     brazilsouth
     canadacentral
+    centralindia
     centralus
     eastus
     eastus2

@@ -140,7 +140,6 @@ AVAILABLE_INSTANCETYPE=(
   e32s_v4
   e48s_v4
   e64s_v4
-  f2s_v2
   f4s_v2
   f8s_v2
   f16s_v2

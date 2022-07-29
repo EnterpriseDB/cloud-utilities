@@ -3,7 +3,10 @@
     "Statement": [
         {
             "Action": [
+                "autoscaling:CreateOrUpdateTags",
+                "autoscaling:DeleteTags",
                 "autoscaling:DescribeAccountLimits",
+                "autoscaling:DescribeTags",
                 "cloudwatch:DeleteDashboards",
                 "cloudwatch:GetDashboard",
                 "cloudwatch:GetMetricData",

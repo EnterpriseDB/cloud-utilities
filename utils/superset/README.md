@@ -12,13 +12,17 @@ Requires user to pass the database_name (which should be present in his/her envi
 
 # Run Comamnd
 
-    python3 db_name_change.py -d <database_name> -i <input_file> -o <output_file>
-
+    python3 db_name_change.py <database_name> -i <input_file> -o <output_file>
+    e.g.
+    python3 db_name_change.py edb -i utils/superset/pgd_monitoring_template.json  -o utils/superset/upload.json/
+ 
 # Usage
-    usage: db_name_change.py [-h] -d DATABASE_NAME [-i INPUT_FILE] [-o OUTPUT_FILE]
+    usage: db_name_change.py [-h] [-i INPUT_FILE] [-o OUTPUT_FILE] database_name
+
+    positional arguments:
+    database_name
 
     optional arguments:
-        -h, --help            show this help message and exit
-        -d DATABASE_NAME,     --database_name DATABASE_NAME
-        -i INPUT_FILE,        --input_file INPUT_FILE
-        -o OUTPUT_FILE,       --output_file OUTPUT_FILE
+    -h, --help            show this help message and exit
+    -i INPUT_FILE, --input_file INPUT_FILE
+    -o OUTPUT_FILE, --output_file OUTPUT_FILE

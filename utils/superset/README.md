@@ -8,7 +8,7 @@ Requires user to pass the database_name (which should be present in his/her envi
 
 # Requirements
 
-    Python 3.x 
+    Python 3.4 or higher
 
 # Run Comamnd
 

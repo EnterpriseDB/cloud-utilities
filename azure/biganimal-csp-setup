@@ -352,7 +352,7 @@ print_and_save_result()
 {
   local client_secret="N/A"
   [[ -n "${spn}" ]] && client_secret=$(echo "${spn}" | jq -r .password)
-  tenant=$(az account show -s "${subscriptAion}" -o json | jq -r .tenantId)
+  tenant=$(az account show -s "${subscription}" -o json | jq -r .tenantId)
   jq --null-input \
     --arg client_id "${client_id}" \
     --arg client_secret "REDACTED" \

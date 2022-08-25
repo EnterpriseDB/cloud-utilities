@@ -367,7 +367,6 @@ check
 set_subscription
 show_account
 create_ad_sp
-# add_spn_owners
 create_or_update_custom_role
 print_and_save_result
 grant_api_permissions

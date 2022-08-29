@@ -251,21 +251,6 @@ show_account()
   az account show
 }
 
-create_ad_sp()
-{
-  # create SPN using azure-cli
-  if [[ -z "${client_id}" ]]; then
-    echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-    years="${years:-1}"
-    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
-      --role Owner --scopes /subscriptions/"${subscription}" --years "${years}")
-  else
-    echo "Update application ${client_id} MS Graph API permissions"
-  fi
-  echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
-  sleep 15
-}
-
 create_or_update_custom_role()
 {
     # get custom role id
@@ -283,18 +268,61 @@ create_or_update_custom_role()
     fi
 }
 
+create_ad_sp()
+{
+  echo "rolename:"${role_name}
+  # create SPN using azure-cli
+  if [[ -z "${client_id}" ]]; then
+    echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
+    years="${years:-1}"
+    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
+      --role ${role_name} --scopes /subscriptions/"${subscription}" --years "${years}")
+  else
+    echo "Update application ${client_id} MS Graph API permissions"
+  fi
+  echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
+  sleep 1
+}
+
+add_spn_owners()
+{
+  # add current user and spn to the SPN owner list
+  [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
+  # The following checks changes starting from Azure CLI 2.37 due to the usage of MS Graph APIs
+  # refers to https://github.com/Azure/azure-cli/issues/22580
+  if [ "$msgraphapi" = "false" ]; then
+    sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query objectId --only-show-errors)
+    user_object_id=$(az ad signed-in-user show -o tsv --query objectId --only-show-errors)
+  else
+    sp_object_id=$(az ad sp show --id "${client_id}" -o tsv --query id --only-show-errors)
+    user_object_id=$(az ad signed-in-user show -o tsv --query id --only-show-errors)
+  fi
+
+  echo "Add Azure AD Service Principal Owners..."
+  # To add owners to application
+  az ad app owner add --id "${client_id}" --owner-object-id "${sp_object_id}" --only-show-errors
+  az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}" --only-show-errors
+
+  # To add owners to service principal
+  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+    --headers Content-Type=application/json --output none \
+    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
+}
+
 create_custom_role()
 {
   # create custom role for the SPN
   echo "Creating custom role for Azure AD Service Principal..."
-  az role definition create --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json
+  az role definition create --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json \
+    --only-show-errors
 }
 
 update_custom_role()
 {
-  # create custom role for the SPN
+  # update custom role for the SPN
   echo "update custom role for Azure AD Service Principal..."
-  az role definition update --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json
+  az role definition update --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json \
+    --only-show-errors
 }
 
 grant_api_permissions()
@@ -366,7 +394,8 @@ print_and_save_result()
 check
 set_subscription
 show_account
-create_ad_sp
 create_or_update_custom_role
+create_ad_sp
+add_spn_owners
 print_and_save_result
 grant_api_permissions

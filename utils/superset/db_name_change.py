@@ -43,8 +43,8 @@ def read_input_file(input_file, db_name):
     if PurePath(input_file).suffix == ".json":
         with open(input_file, encoding="utf_8") as file_obj:
             db_template = json.load(file_obj)
-            dashborads = db_template["dashboards"]
-            for dashboard in dashborads:
+            dashboards = db_template["dashboards"]
+            for dashboard in dashboards:
                 slices = dashboard["__Dashboard__"]["slices"]
                 for dashboard_slice in slices:
                     db_params = json.loads(dashboard_slice["__Slice__"]["params"])

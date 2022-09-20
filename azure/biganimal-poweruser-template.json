@@ -1,0 +1,34 @@
+{
+  "Name": "biganimal-poweruser",
+  "IsCustom": true,
+  "assignableScopes": [
+    "/subscriptions/${subscription}"
+  ],
+  "Description": "Allow BigAnimal to manage its cloud resources",
+  "permissions": [
+    {
+      "actions": [
+        "Microsoft.AlertsManagement/*",
+        "Microsoft.Authorization/*",
+        "Microsoft.Capacity/*",
+        "Microsoft.Compute/*",
+        "Microsoft.ContainerInstance/*",
+        "Microsoft.ContainerService/*",
+        "Microsoft.Insights/*",
+        "Microsoft.KeyVault/*",
+        "Microsoft.ManagedIdentity/*",
+        "Microsoft.Network/*",
+        "Microsoft.OperationalInsights/*",
+        "Microsoft.OperationsManagement/*",
+        "Microsoft.Portal/*",
+        "Microsoft.Resources/*",
+        "Microsoft.Storage/*",
+        "Microsoft.network/*"
+      ],
+      "dataActions": [],
+      "notActions": [],
+      "notDataActions": []
+    }
+  ]
+}
+

@@ -76,6 +76,7 @@ check()
   check_az_version
   check_display_name
   check_subscription
+
 }
 
 suggest()
@@ -182,6 +183,20 @@ check_id()
 {
   if [[ -n "${client_id}" ]]; then
     display_name=$(az ad app show --id "${client_id}" -o tsv --query displayName --only-show-errors)
+  fi
+}
+
+download_dependencies()
+{
+  # a shell func to download all the dependecies of this script before starting to execute
+  # Download the latest biganimal role template or overwrite it
+  template_file=biganimal-poweruser-template.json
+  wget https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -O ${template_file}
+  if [[ -s "${template_file}" ]]; then
+    echo "Downloaded ${template_file}"
+  else
+    echo "Error: failed to download ${template_file}"
+    exit 1
   fi
 }
 
@@ -392,6 +407,7 @@ print_and_save_result()
 }
 
 check
+download_dependencies
 set_subscription
 show_account
 create_or_update_custom_role

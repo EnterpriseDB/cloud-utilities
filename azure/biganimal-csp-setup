@@ -76,7 +76,6 @@ check()
   check_az_version
   check_display_name
   check_subscription
-
 }
 
 suggest()

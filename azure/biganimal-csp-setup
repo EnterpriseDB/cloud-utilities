@@ -185,6 +185,20 @@ check_id()
   fi
 }
 
+download_dependencies()
+{
+  # a shell func to download all the dependecies of this script before starting to execute
+  # Download the latest biganimal role template or overwrite it
+  template_file=biganimal-poweruser-template.json
+  wget https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -O ${template_file}
+  if [[ -s "${template_file}" ]]; then
+    echo "Downloaded ${template_file}"
+  else
+    echo "Error: failed to download ${template_file}"
+    exit 1
+  fi
+}
+
 retry ()
 {
   local attempts=5
@@ -392,6 +406,7 @@ print_and_save_result()
 }
 
 check
+download_dependencies
 set_subscription
 show_account
 create_or_update_custom_role

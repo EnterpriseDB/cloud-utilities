@@ -190,11 +190,11 @@ download_dependencies()
   # a shell func to download all the dependecies of this script before starting to execute
   # Download the latest biganimal role template or overwrite it
   template_file=biganimal-poweruser-template.json
-  wget https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -O ${template_file}
-  if [[ -s "${template_file}" ]]; then
-    echo "Downloaded ${template_file}"
+  wget https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -O ${CURRENT_PATH}/{template_file}
+  if [[ -s "${CURRENT_PATH}/${template_file}" ]]; then
+    echo "Downloaded ${CURRENT_PATH}/${template_file}"
   else
-    echo "Error: failed to download ${template_file}"
+    echo "Error: failed to download ${CURRENT_PATH}/${template_file}"
     exit 1
   fi
 }

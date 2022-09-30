@@ -83,6 +83,7 @@
                 "eks:TagResource",
                 "eks:UntagResource",
                 "eks:UpdateAddon",
+                "eks:UpdateClusterVersion",
                 "eks:UpdateNodegroupConfig",
                 "eks:UpdateNodegroupVersion",
                 "iam:AttachRolePolicy",

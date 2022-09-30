@@ -322,7 +322,7 @@ mgmt_vm_type="m5(a).large"
 mgmt_nat_gateways=3
 
 # hardcode EHA proxy workload used VM instance type info
-ehaproxy_vm_type="m5(a).large"
+ehaproxy_vm_type="c5.large"
 pg_eha_proxy_vm_vcpu=2
 
 # set the architecture based on parameters architecture and ha (deprecated)

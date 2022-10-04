@@ -296,8 +296,8 @@ mgmt_vm_type="Standard_D2_v4"
 mgmt_vm_family="Standard Dv4 Family"
 
 # hardcode EHA proxy workload used VM instance type info
-eha_proxy_vm_type="Standard_D2_v4"
-eha_proxy_vm_family="Standard Dv4 Family"
+eha_proxy_vm_type="Standard_F2s_v2"
+eha_proxy_vm_family="Standard FSv2 Family"
 eha_proxy_instance_type_info=($(_extract_instancetype_info "$eha_proxy_vm_type"))
 pg_eha_proxy_vm_vcpu=${eha_proxy_instance_type_info[0]}
 
@@ -563,9 +563,11 @@ echo "#######################"
 echo ""
 vmsku_mgmt=$mgmt_vm_type
 vmsku_pg=$pg_vm_type
+[ "$architecture" = "eha" ] && vmsku_eha_proxy=$eha_proxy_vm_type
 az vm list-skus -l "$region" --all -o table > "$TMP_SKU_OUTPUT"
 sku_restriction_mgmt=$(get_sku_restriction_for "${vmsku_mgmt}")
 sku_restriction_pg=$(get_sku_restriction_for "${vmsku_pg}")
+[ "$architecture" = "eha" ] && sku_restriction_eha_proxy=$(get_sku_restriction_for "${vmsku_eha_proxy}")
 
 # print region Azure VM SKU checking result
 FMT="%-17s %-22s %-23s %-8s %-b\n"
@@ -573,6 +575,7 @@ printf "$FMT" "ResourceType" "Regions" "Name" "Zones" "Restrictions"
 printf "$FMT" "------------" "---------" "----" "-----" "------------"
 printf "$FMT" "virtualMachines" "$region" "${vmsku_mgmt}" "$(get_sku_zone_for "${vmsku_mgmt}")" "$(sku_suggest "$sku_restriction_mgmt" "${vmsku_mgmt}")"
 printf "$FMT" "virtualMachines" "$region" "${vmsku_pg}" "$(get_sku_zone_for "${vmsku_pg}")" "$(sku_suggest "$sku_restriction_pg" "${vmsku_pg}")"
+[ "$architecture" = "eha" ] && printf "$FMT" "virtualMachines" "$region" "${vmsku_eha_proxy}" "$(get_sku_zone_for "${vmsku_eha_proxy}")" "$(sku_suggest "$sku_restriction_eha_proxy" "${vmsku_eha_proxy}")"
 
 echo ""
 echo "#######################"

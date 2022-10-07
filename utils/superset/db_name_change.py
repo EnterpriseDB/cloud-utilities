@@ -4,6 +4,7 @@ This script will generate the upload JSON for the entered database name.
 import json
 import argparse
 import logging
+import pathlib
 import sys
 from pathlib import PurePath
 
@@ -40,32 +41,29 @@ def read_input_file(input_file, db_name):
     Input file function to read the file content and replace the database name.
     """
     file_data = {"dashboards": [], "datasources": []}
-    if PurePath(input_file).suffix == ".json":
-        with open(input_file, encoding="utf_8") as file_obj:
-            db_template = json.load(file_obj)
-            dashboards = db_template["dashboards"]
-            for dashboard in dashboards:
-                slices = dashboard["__Dashboard__"]["slices"]
-                for dashboard_slice in slices:
-                    db_params = json.loads(dashboard_slice["__Slice__"]["params"])
-                    # Replacing the database name with passed argument
-                    db_params["database_name"] = db_name
-                    dashboard_slice["__Slice__"]["params"] = json.dumps(db_params)
-
-                temp_dict = {"__Dashboard__": dashboard["__Dashboard__"]}
-                file_data["dashboards"].append(temp_dict)
-
-            datasources = db_template["datasources"]
-            for datasource in datasources:
-                db_params = json.loads(datasource["__SqlaTable__"]["params"])
+    with open(input_file, encoding="utf_8") as file_obj:
+        db_template = json.load(file_obj)
+        dashboards = db_template["dashboards"]
+        for dashboard in dashboards:
+            slices = dashboard["__Dashboard__"]["slices"]
+            for dashboard_slice in slices:
+                db_params = json.loads(dashboard_slice["__Slice__"]["params"])
                 # Replacing the database name with passed argument
                 db_params["database_name"] = db_name
-                datasource["__SqlaTable__"]["params"] = json.dumps(db_params)
+                dashboard_slice["__Slice__"]["params"] = json.dumps(db_params)
 
-                temp_dict = {"__SqlaTable__": datasource["__SqlaTable__"]}
-                file_data["datasources"].append(temp_dict)
-    else:
-        raise argparse.ArgumentTypeError('File must have JSON extension')
+            temp_dict = {"__Dashboard__": dashboard["__Dashboard__"]}
+            file_data["dashboards"].append(temp_dict)
+
+        datasources = db_template["datasources"]
+        for datasource in datasources:
+            db_params = json.loads(datasource["__SqlaTable__"]["params"])
+            # Replacing the database name with passed argument
+            db_params["database_name"] = db_name
+            datasource["__SqlaTable__"]["params"] = json.dumps(db_params)
+
+            temp_dict = {"__SqlaTable__": datasource["__SqlaTable__"]}
+            file_data["datasources"].append(temp_dict)
 
     return file_data
 
@@ -75,25 +73,25 @@ def write_output_file(output_file, file_data):
     """
     This function will write the file.
     """
-    if PurePath(output_file).suffix == ".json":
-        with open(output_file, 'w', encoding="utf_8") as file_obj:
-            json.dump(file_data, file_obj, indent=4)
-    else:
-        raise argparse.ArgumentTypeError('File must have JSON extension')
+    with open(output_file, 'w', encoding="utf_8") as file_obj:
+        json.dump(file_data, file_obj, indent=4)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("database_name")
-    parser.add_argument("-i", "--input_file", type=str, default="pgd_monitoring_template.json")
-    parser.add_argument("-o", "--output_file", type=str, default="upload.json")
+    parser.add_argument("-i", "--input_file", type=PurePath, default="pgd_monitoring_template.json")
+    parser.add_argument("-o", "--output_file", type= PurePath, default="upload.json")
     args = parser.parse_args()
     msg = f"Database name entered: {args.database_name}"
     logging.info(msg)
 
-    file_data_template = read_input_file(args.input_file, args.database_name)
-    write_output_file(args.output_file, file_data_template)
+    if PurePath(args.input_file).suffix == ".json" and PurePath(args.output_file).suffix == ".json":
+        file_data_template = read_input_file(args.input_file, args.database_name)
+        write_output_file(args.output_file, file_data_template)
+    else:
+        raise argparse.ArgumentTypeError('File must have JSON extension')
 
     msg = (f"Upload file generated. Please import the '{args.output_file}' "
            f"file in your Superset using Import Dashboard option under "

@@ -112,6 +112,7 @@ AVAILABLE_REGIONS=(
     eastus
     eastus2
     francecentral
+    germanywestcentral
     japaneast
     northeurope
     norwayeast

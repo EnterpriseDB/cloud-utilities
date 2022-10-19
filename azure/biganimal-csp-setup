@@ -57,6 +57,7 @@ show_help()
   echo "  Microsoft.Authorization/roleAssignments/write"
   echo "Required tools:"
   echo "  jq"
+  echo "  wget"
   echo "Usage:"
   echo "  $0 -d NAME -s SUBSCRIPTION_ID [-i CLIENT_ID] [options]"
   echo ""
@@ -71,8 +72,9 @@ show_help()
 
 check()
 {
-  # jq is required.
+  # jq, wget are required.
   hash jq > /dev/null 2>&1 || { show_help; suggest "Error: please install jq on the system" alert; }
+  hash wget > /dev/null 2>&1 || { show_help; suggest "Error: please install wget on the system" alert; }
   check_az_version
   check_display_name
   check_subscription

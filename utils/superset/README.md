@@ -2,7 +2,7 @@
 
 The purpose of the script is to update the dashboard JSON template file with the database name of the user’s environment. 
 
-This script will generate the new upload JSON file with the database name of the user and will be ready to import to have the PGD dashboard.  
+This script will generate the new upload JSON file with the database name of the user and will be ready to import to have the EDB Postgres Distributed monitoring dashboard.
 
 Requires user to pass the database_name (which should be present in his/her environment) and optional input file and output file in JSON format as an argument in the script execution. The default extension is JSON for both input and output files. 
 

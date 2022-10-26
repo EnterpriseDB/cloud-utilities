@@ -162,6 +162,20 @@ AVAILABLE_INSTANCETYPE=(
   d32s_v3
   d48s_v3
   d64s_v3
+  e2s_v5
+  e4s_v5
+  e8s_v5
+  e16s_v5
+  e20s_v5
+  e32s_v5
+  e48s_v5
+  e64s_v5
+  e96s_v5
+  m8ms
+  m16ms
+  m32ms
+  m64ms
+  m128ms
 )
 
 function _toLower()
@@ -192,8 +206,15 @@ function _extract_instancetype_info()
       vcpu="${BASH_REMATCH[2]}"
       psa="${BASH_REMATCH[3]}"
       version="${BASH_REMATCH[4]}"
-      vm_type="Standard_$(_toUpper $serie)${vcpu}${psa}_${version}"
-      family="Standard $(_toUpper $serie)$(_toUpper ${psa})${version} Family"
+      vm_type="Standard_$(_toUpper "$serie")${vcpu}${psa}_${version}"
+      family="Standard $(_toUpper "$serie")$(_toUpper "${psa}")${version} Family"
+    # given "m64ms", the regex pattern is (m)(64)(ms)
+    elif [[ "${instance_type}" =~ ([a-z]*)([0-9]*)([a-z]*) ]]; then
+      serie="${BASH_REMATCH[1]}"
+      vcpu="${BASH_REMATCH[2]}"
+      psa="${BASH_REMATCH[3]}"
+      vm_type="Standard_$(_toUpper "$serie")${vcpu}${psa}"
+      family="Standard $(_toUpper "${psa}") Family"
     else
       echo "Error: unsupported instance type: $1"
       exit 1

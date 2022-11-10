@@ -7,7 +7,6 @@ This repository contains utilities and scripts to help on using [BigAnimal][1]
 The below software utilities are required to be installed on the machine
 where the scripts provided in this repository are used:
 
-- [wget][9]
 - [jq][3]
 - [azure cli][4] v2.26 or above (if runs against Azure)
 - [aws-cli][6] v.2.3.0 or above (if runs against AWS)
@@ -73,5 +72,3 @@ For more details about BigAnimal API, please refer to [Using the BigAnimal API][
 [6]: https://aws.amazon.com/cli/
 [7]: https://www.enterprisedb.com/docs/biganimal/latest/reference/cli/
 [8]: https://formulae.brew.sh/formula/bash
-[9]: https://www.gnu.org/software/wget/
-

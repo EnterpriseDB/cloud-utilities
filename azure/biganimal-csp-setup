@@ -57,7 +57,6 @@ show_help()
   echo "  Microsoft.Authorization/roleAssignments/write"
   echo "Required tools:"
   echo "  jq"
-  echo "  wget"
   echo "Usage:"
   echo "  $0 -d NAME -s SUBSCRIPTION_ID [-i CLIENT_ID] [options]"
   echo ""
@@ -72,9 +71,8 @@ show_help()
 
 check()
 {
-  # jq, wget are required.
+  # jq is required
   hash jq > /dev/null 2>&1 || { show_help; suggest "Error: please install jq on the system" alert; }
-  hash wget > /dev/null 2>&1 || { show_help; suggest "Error: please install wget on the system" alert; }
   check_az_version
   check_display_name
   check_subscription
@@ -192,7 +190,7 @@ download_dependencies()
   # a shell func to download all the dependecies of this script before starting to execute
   # Download the latest biganimal role template or overwrite it
   template_file=biganimal-poweruser-template.json
-  wget https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -O ${CURRENT_PATH}/${template_file}
+  curl https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -o "${CURRENT_PATH}"/${template_file}
   if [[ -s "${CURRENT_PATH}/${template_file}" ]]; then
     echo "Downloaded ${CURRENT_PATH}/${template_file}"
   else
@@ -271,10 +269,11 @@ create_or_update_custom_role()
 {
     # get custom role id
     echo "Create or update custom role"
-    role_name="biganimal-poweruser"
+    role_name="biganimal-poweruser-${subscription}"
     roleScope="/subscriptions/${subscription}"
     role_id=$(az role definition list --only-show-errors --query "[?roleName=='${role_name}'].id" -o tsv)
-    jq --arg scope "$roleScope" '(.assignableScopes[]) |= $scope' ${CURRENT_PATH}/biganimal-poweruser-template.json > ${CURRENT_PATH}/biganimal-poweruser.json
+    jq --arg rolename "$role_name" --arg scope "$roleScope" '(.Name) |= $rolename | (.assignableScopes[]) |= $scope' \
+      "${CURRENT_PATH}"/biganimal-poweruser-template.json > "${CURRENT_PATH}"/biganimal-poweruser.json
     if [[ -z "${role_id}" ]]; then
       echo "Did not find the custom role, creating it..."
       create_custom_role
@@ -286,13 +285,13 @@ create_or_update_custom_role()
 
 create_ad_sp()
 {
-  echo "rolename:"${role_name}
+  echo "rolename: ${role_name}"
   # create SPN using azure-cli
   if [[ -z "${client_id}" ]]; then
     echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
     years="${years:-1}"
     spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
-      --role ${role_name} --scopes /subscriptions/"${subscription}" --years "${years}")
+      --role "${role_name}" --scopes /subscriptions/"${subscription}" --years "${years}")
   else
     echo "Update application ${client_id} MS Graph API permissions"
   fi
@@ -329,7 +328,7 @@ create_custom_role()
 {
   # create custom role for the SPN
   echo "Creating custom role for Azure AD Service Principal..."
-  az role definition create --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json \
+  az role definition create --subscription "${subscription}" --role-definition "${CURRENT_PATH}"/biganimal-poweruser.json \
     --only-show-errors
 }
 
@@ -337,7 +336,7 @@ update_custom_role()
 {
   # update custom role for the SPN
   echo "update custom role for Azure AD Service Principal..."
-  az role definition update --subscription ${subscription} --role-definition ${CURRENT_PATH}/biganimal-poweruser.json \
+  az role definition update --subscription "${subscription}" --role-definition "${CURRENT_PATH}"/biganimal-poweruser.json \
     --only-show-errors
 }
 

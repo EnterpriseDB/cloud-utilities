@@ -86,6 +86,7 @@
                 "eks:UpdateClusterVersion",
                 "eks:UpdateNodegroupConfig",
                 "eks:UpdateNodegroupVersion",
+                "elasticloadbalancing:DescribeLoadBalancers",
                 "iam:AttachRolePolicy",
                 "iam:CreateOpenIDConnectProvider",
                 "iam:CreatePolicy",

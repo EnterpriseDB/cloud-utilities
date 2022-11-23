@@ -96,7 +96,7 @@ done
 check
 
 # 1. Get Authentication Provider Relevant Information
-curl -s ${BASE_URL}/api/v1/auth/provider > provider_resp || cat provider_resp || exit 1
+curl -s ${BASE_URL}/api/v2/auth/provider > provider_resp || cat provider_resp || exit 1
 # response sample
 # {
 #   "clientId": "pM8PRguGtW9yVnrsvrvpaPyyeS9fVvFh",
@@ -186,7 +186,7 @@ function exchange_biganimal_token()
 {
     local raw_token=$1
     curl -s --request POST \
-     --url "$BASE_URL/api/v1/auth/token" \
+     --url "$BASE_URL/api/v2/auth/token" \
      --header "content-type: application/json" \
      --data "{\"token\":\"$raw_token\"}" > biganimal_token_resp || cat biganimal_token_resp || exit 1
     # Response Sample

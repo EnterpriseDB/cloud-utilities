@@ -320,7 +320,8 @@ pg_vm_class_size="${instance_type_info[2]}.${instance_type_info[3]}"
 mgmt_vm_vcpu=2
 mgmt_vm_instances=3
 mgmt_vm_type="m5(a).large"
-mgmt_nat_gateways=3
+mgmt_public_ips=3
+mgmt_nat_gateways_per_az=1
 
 # hardcode EHA proxy workload used VM instance type info
 ehaproxy_vm_type="c5.large"
@@ -336,7 +337,12 @@ function infra_vcpus()
 
 function need_public_ip()
 {
-    [ "$activate" = "true" ] && echo $mgmt_nat_gateways || echo 0
+    [ "$activate" = "true" ] && echo $mgmt_public_ips || echo 0
+}
+
+function need_nat_gateway()
+{
+    [ "$activate" = "true" ] && echo $mgmt_nat_gateways_per_az || echo 0
 }
 
 function need_vpc()
@@ -475,11 +481,39 @@ nlb_usage=$(aws cloudwatch get-metric-statistics --namespace "AWS/Usage" --metri
   --query 'Datapoints[0].Maximum')
 [[ "${nlb_usage}" = "null" ]] && nlb_usage=0
 
+# For nat gateways we care about the number per availability zone so we use subnet ID to get the AZs
+nat_azs=()
+for subnet_id in $( aws ec2 describe-nat-gateways --region "$region" --query 'NatGateways[*].SubnetId' --output text ); do
+	az=$( aws ec2 describe-subnets --region "$region" --query "Subnets[?SubnetId=='$subnet_id'] | [0].AvailabilityZone" --output text )
+	[[ "$az" = "None" ]] && continue
+	nat_azs+=( $az )
+done
+
+# Sort the AZs so we can more easy determine which has the most NAT gateways as that is the quota we care about
+IFS=$'\n' azs_sorted=($(sort <<<"${nat_azs[*]}")); unset IFS
+
+max_nat_per_az_usage=0
+current_count_per_az=0
+current_az=""
+
+for az in "${azs_sorted[@]}"; do
+	if [ "${az}" = "$current_az" ]; then
+		current_count_per_az=$((current_count_per_az+1))
+	else
+		current_az=$az
+		current_count_per_az=1
+	fi
+
+	[[ $current_count_per_az -gt $max_nat_per_az_usage ]] && max_nat_per_az_usage=$current_count_per_az
+done
+
 # getting service quota limits
 cpu_quota_code=( "L-1216C47A" "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" )
 cpu_quota=$(aws service-quotas get-service-quota --region "$region" --service-code ec2 --quota-code "${cpu_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
 eip_quota_code=( "L-0263D0A3" "EC2-VPC Elastic IPs" )
 eip_quota=$(aws service-quotas get-service-quota --region "$region" --service-code ec2 --quota-code "${eip_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+nat_gateway_quota_code=( "L-FE5A380F" "NAT gateways per Availability Zone" )
+nat_gateway_quota=$(aws service-quotas get-service-quota --region "$region" --service-code vpc --quota-code "${nat_gateway_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
 vpc_quota_code=( "L-F678F1CE" "VPCs per Region" )
 vpc_quota=$(aws service-quotas get-service-quota --region "$region" --service-code vpc --quota-code "${vpc_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
 nlb_quota_code=( "L-69A177A2" "Network Load Balancers per Region" )
@@ -491,6 +525,7 @@ need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
 need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
 need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
 need_eip=$(need_public_ip)
+need_nat_gateway=$(need_nat_gateway)
 need_vpc=$(need_vpc)
 need_nlb=1
 shared_mgmt_eha_proxy_vcpus=0
@@ -504,6 +539,7 @@ gap_regional_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_regional_vcpus))
 gap_eip=$((${eip_quota%.*} - ${eip_usage%.*} - need_eip))
 gap_vpc=$((${vpc_quota%.*} - ${vpc_usage%.*} - need_vpc))
 gap_nlb=$((${nlb_quota%.*} - ${nlb_usage%.*} - need_nlb))
+gap_nat_gateway=$((${nat_gateway_quota%.*} - ${max_nat_per_az_usage%.*} - need_nat_gateway))
 
 function quota_suggest()
 {
@@ -530,6 +566,7 @@ printf "$FMT" "$ehaproxy_vm_type vCPUs" "${cpu_quota_code[1]%(*}instances" ${cpu
 printf "$FMT" "Elastic IP Addresses" "${eip_quota_code[1]}" ${eip_quota%.*} ${eip_usage} ${need_eip} ${gap_eip} "$(quota_suggest $gap_eip "${eip_quota_code[1]}" "${eip_quota%.*}")"
 printf "$FMT" "VPCs" "${vpc_quota_code[1]}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code[1]}" "${vpc_quota%.*}")"
 printf "$FMT" "NLBs" "${nlb_quota_code[1]}" ${nlb_quota%.*} ${nlb_usage%.*} ${need_nlb} ${gap_nlb} "$(quota_suggest $gap_nlb "${nlb_quota_code[1]}" "${nlb_quota%.*}")"
+printf "$FMT" "NAT Gateways" "${nat_gateway_quota_code[1]}" ${nat_gateway_quota%.*} ${max_nat_per_az_usage%.*} ${need_nat_gateway} ${gap_nat_gateway} "$(quota_suggest $gap_nat_gateway "${nat_gateway_quota_code[1]}" "${nat_gateway_quota%.*}")"
 echo ""
 echo "Note: the listed Instance Types are referring to the same AWS Service Quota."
 
@@ -540,6 +577,7 @@ ba_preflight=""
 [ "${gap_eip}" -lt 0 ] && suggested_quota_increases[${eip_quota_code[0]}]=$((${eip_quota%.*}+gap_eip*-1))
 [ "${gap_vpc}" -lt 0 ] && suggested_quota_increases[${vpc_quota_code[0]}]=$((${vpc_quota%.*}+gap_vpc*-1))
 [ "${gap_nlb}" -lt 0 ] && suggested_quota_increases[${nlb_quota_code[0]}]=$((${nlb_quota%.*}+gap_nlb*-1))
+[ "${gap_nat_gateway}" -lt 0 ] && suggested_quota_increases[${nat_gateway_quota_code[0]}]=$((${nat_gateway_quota%.*}+gap_nat_gateway*-1))
 for i in "${!suggested_quota_increases[@]}"; do
     ba_preflight="${ba_preflight}\"$i\":\"${suggested_quota_increases[$i]}\","
 done

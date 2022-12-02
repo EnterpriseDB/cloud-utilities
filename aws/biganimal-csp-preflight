@@ -495,7 +495,7 @@ IFS=$'\n' azs_sorted=($(sort <<<"${nat_azs[*]}")); unset IFS
 max_nat_per_az_usage=0
 current_count_per_az=0
 current_az=""
-echo "${azs_sorted[*]}"
+
 for az in "${azs_sorted[@]}"; do
 	if [ "${az}" = "$current_az" ]; then
 		current_count_per_az=$((current_count_per_az+1))

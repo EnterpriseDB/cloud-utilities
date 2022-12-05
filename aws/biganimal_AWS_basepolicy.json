@@ -162,6 +162,7 @@
                 "logs:UntagLogGroup",
                 "s3:CreateBucket",
                 "s3:DeleteBucket",
+                "s3:DeleteBucketLifecycle",
                 "s3:DeleteBucketPolicy",
                 "s3:DescribeJob",
                 "s3:Get*",
@@ -173,7 +174,9 @@
                 "s3:PutBucketTagging",
                 "s3:PutBucketVersioning",
                 "s3:PutEncryptionConfiguration",
+                "s3:PutLifecycleConfiguration",
                 "s3:PutObject",
+                "servicequotas:ListAWSDefaultServiceQuotas",
                 "servicequotas:ListServiceQuotas",
                 "sts:DecodeAuthorizationMessage"
             ],

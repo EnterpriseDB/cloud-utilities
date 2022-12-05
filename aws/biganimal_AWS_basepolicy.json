@@ -176,6 +176,7 @@
                 "s3:PutEncryptionConfiguration",
                 "s3:PutLifecycleConfiguration",
                 "s3:PutObject",
+                "servicequotas:ListAWSDefaultServiceQuotas",
                 "servicequotas:ListServiceQuotas",
                 "sts:DecodeAuthorizationMessage"
             ],

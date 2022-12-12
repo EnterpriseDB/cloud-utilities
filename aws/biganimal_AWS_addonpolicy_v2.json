@@ -155,7 +155,8 @@
       "Effect": "Allow",
       "Resource": [
           "arn:aws:kms:*:*:key/*",
-          "arn:aws:kms:*:*:alias/kms-cmk-*"
+          "arn:aws:kms:*:*:alias/kms-cmk-*",
+          "arn:aws:kms:*:*:alias/telemetry-cmk-*"
       ]
     },
     {

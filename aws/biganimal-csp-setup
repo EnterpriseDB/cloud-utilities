@@ -220,7 +220,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -r|--role-name-suffix)
-      suffix_role_name="role-${2}"
+      suffix_role_name="$2"
       shift 2
       ;;
     -q|--increase-quotas)

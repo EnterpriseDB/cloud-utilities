@@ -83,7 +83,7 @@ show_help()
   echo "  -a, --account:            Your AWS account ID that will be used by BigAnimal."
   echo "  -b, --biganimal-account:  The AWS account ID provided by BigAnimal (should be a 12 chars numeric string)."
   echo "  -e, --external-id:        The AWS external ID provided by BigAnimal (should be a 16 chars alphanumeric string)."
-  echo "  -p, --policy-name-suffix: The suffix part in the name of the IAM policy (defaults policy name is 'biganimal-policy')."
+  echo "  -p, --policy-name-suffix: The suffix part in the name of the IAM policies (defaults policies name are 'biganimal-base' and 'biganimal-addon')."
   echo "  -r, --role-name-suffix:   The suffix part in the name of the IAM role (defaults role name is 'biganimal-role')."
   echo "  -q, --increase-quotas:    Create tickets to request Service Quota increases if needed (defaults to false)."
   echo "  -g, --region:             The name of the AWS region in which ask for service quota increases (defaults to your AWS CLI profile)"
@@ -362,22 +362,40 @@ EOF
 
     # checking if the existing role is having the legacy policy attached to it
     legacy_policy_attached=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" \
-      --query "length(AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-policy-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn)" \
+      --query "length(AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn)" \
       --output json)
     if [ "$legacy_policy_attached" -gt 0 ]; then
       # a legacy policy is attached to the role, going to remove it
       attached_legacy_policy_arn=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" \
-        --query "AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-policy-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn" \
+        --query "AttachedPolicies[*]|[?starts_with(PolicyName, \`biganimal-${suffix_policy_name}\`) == \`true\`]|[*].PolicyArn" \
         --output text)
-        echo -e "Detaching legacy AWS IAM policy ${GREEN}biganimal-policy-${suffix_policy_name}${NC} from role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-        aws iam detach-role-policy --policy-arn "$attached_legacy_policy_arn" --role-name "biganimal-$suffix_role_name"
-        echo -e "Deleting legacy AWS IAM policy ${GREEN}biganimal-policy-${suffix_policy_name}${NC} from role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
-        older_legacy_policy_versions="$(aws iam list-policy-versions --policy-arn "$attached_legacy_policy_arn" | jq -r '.Versions[] | select(.IsDefaultVersion == false) | .VersionId')"
-        for policy_version_id in $older_legacy_policy_versions; do
-            echo -e "Deleting legacy AWS IAM policy ${GREEN}biganimal-policy-${suffix_policy_name}${NC} version ${GREEN}${policy_version_id}${NC}"
-            aws iam delete-policy-version --policy-arn "$attached_legacy_policy_arn" --version-id "$policy_version_id"
-        done
-        aws iam delete-policy --policy-arn "$attached_legacy_policy_arn"
+      echo -e "Detaching legacy AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} from role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+      aws iam detach-role-policy --policy-arn "$attached_legacy_policy_arn" --role-name "biganimal-$suffix_role_name"
+      echo -e "Deleting legacy AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} from role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+      older_legacy_policy_versions="$(aws iam list-policy-versions --policy-arn "$attached_legacy_policy_arn" | jq -r '.Versions[] | select(.IsDefaultVersion == false) | .VersionId')"
+      for policy_version_id in $older_legacy_policy_versions; do
+          echo -e "Deleting legacy AWS IAM policy ${GREEN}biganimal-${suffix_policy_name}${NC} version ${GREEN}${policy_version_id}${NC}"
+          aws iam delete-policy-version --policy-arn "$attached_legacy_policy_arn" --version-id "$policy_version_id"
+      done
+      aws iam delete-policy --policy-arn "$attached_legacy_policy_arn"
+    fi
+
+    # checking if the existing role is having other policies attached to it, if so they will be detached and deleted
+    other_policies_attached=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" --query "length(AttachedPolicies[*])" --output json)
+    if [ "$other_policies_attached" -gt 2 ]; then
+      # other policies are attached to the role, going to remove them
+      echo -e "Deleting old AWS IAM policies attached to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
+      for (( policy_to_remove=other_policies_attached-1; policy_to_remove>=0; policy_to_remove-- )) ; do
+        attached_policy_arn=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" --query "AttachedPolicies[$policy_to_remove].PolicyArn" --output text)
+        if [[ $attached_policy_arn != "biganimal-base-${suffix_policy_name}" ]] && [[ $attached_policy_arn != "biganimal-addon-${suffix_policy_name}" ]]; then
+          aws iam detach-role-policy --policy-arn "$attached_policy_arn" --role-name "biganimal-$suffix_role_name"
+          older_policy_versions="$(aws iam list-policy-versions --policy-arn "$attached_policy_arn" | jq -r '.Versions[] | select(.IsDefaultVersion == false) | .VersionId')"
+          for policy_version_id in $older_policy_versions; do
+            aws iam delete-policy-version --policy-arn "$attached_policy_arn" --version-id "$policy_version_id"
+          done
+          aws iam delete-policy --policy-arn "$attached_policy_arn"
+        fi
+      done
     fi
   else
     # create IAM role using aws-cli

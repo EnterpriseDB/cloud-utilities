@@ -387,7 +387,7 @@ EOF
       echo -e "Deleting old AWS IAM policies attached to role ${GREEN}biganimal-${suffix_role_name}${NC} within AWS account ${GREEN}${account}${NC}..."
       for (( policy_to_remove=other_policies_attached-1; policy_to_remove>=0; policy_to_remove-- )) ; do
         attached_policy_arn=$(aws iam list-attached-role-policies --role-name "biganimal-$suffix_role_name" --query "AttachedPolicies[$policy_to_remove].PolicyArn" --output text)
-        if [[ $attached_policy_arn != "biganimal-base-${suffix_policy_name}" ]] && [[ $attached_policy_arn != "biganimal-addon-${suffix_policy_name}" ]]; then
+        if [[ "${attached_policy_arn}" != *"biganimal-base-${suffix_policy_name}"* ]] && [[ "${attached_policy_arn}" != *"biganimal-addon-${suffix_policy_name}"* ]]; then
           aws iam detach-role-policy --policy-arn "$attached_policy_arn" --role-name "biganimal-$suffix_role_name"
           older_policy_versions="$(aws iam list-policy-versions --policy-arn "$attached_policy_arn" | jq -r '.Versions[] | select(.IsDefaultVersion == false) | .VersionId')"
           for policy_version_id in $older_policy_versions; do

@@ -416,38 +416,38 @@ EOF
 
   # create ECS, EKS and ELB service linked roles if not exists
   set +e
-  ecs_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForECS --output json --no-cli-pager)
+  ecs_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForECS --output json --no-cli-pager 2>/dev/null)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the ECS service-linked role, will create one"
     ecs_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "ecs.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Creating the ECS service-linked role ${GREEN}${ecs_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
+    echo -e "The ECS service-linked role ${GREEN}${ecs_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC} has been created"
   else
     ecs_service_linked_role_arn=$(echo "$ecs_service_linked_role" | jq -r .'Role.Arn')
     echo -e "Found the ECS service-linked role ${ecs_service_linked_role_arn}, there's no need to create it"
   fi
-  eks_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForAmazonEKS --output json --no-cli-pager)
+  eks_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForAmazonEKS --output json --no-cli-pager 2>/dev/null)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the EKS service-linked role, will create one"
     eks_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "eks.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Creating the EKS service-linked role ${GREEN}${eks_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
+    echo -e "The EKS service-linked role ${GREEN}${eks_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC} has been created"
   else
     eks_service_linked_role_arn=$(echo "$eks_service_linked_role" | jq -r .'Role.Arn')
     echo -e "Found the EKS service-linked role ${eks_service_linked_role_arn}, there's no need to create it"
   fi
-  eks_ng_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForAmazonEKSNodegroup --output json --no-cli-pager)
+  eks_ng_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForAmazonEKSNodegroup --output json --no-cli-pager 2>/dev/null)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the EKS NodeGroup service-linked role, will create one"
     eks_ng_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "eks-nodegroup.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Creating the EKS NodeGroup service-linked role ${GREEN}${eks_ng_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
+    echo -e "The EKS NodeGroup service-linked role ${GREEN}${eks_ng_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC} has been created"
   else
     eks_ng_service_linked_role_arn=$(echo "$eks_ng_service_linked_role" | jq -r .'Role.Arn')
     echo -e "Found the EKS NodeGroup service-linked role ${eks_ng_service_linked_role_arn}, there's no need to create it"
   fi
-  elb_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForElasticLoadBalancing --output json --no-cli-pager)
+  elb_service_linked_role=$(aws iam get-role --role-name AWSServiceRoleForElasticLoadBalancing --output json --no-cli-pager 2>/dev/null)
   if [ $? -ne 0 ]; then
     echo -e "Cannot find the ELB service-linked role, will create one"
     elb_service_linked_role_arn=$(aws iam create-service-linked-role --aws-service-name "elasticloadbalancing.amazonaws.com" --output json --no-cli-pager | jq -r '.Role.Arn')
-    echo -e "Creating the ELB service-linked role ${GREEN}${elb_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC}..."
+    echo -e "The ELB service-linked role ${GREEN}${elb_service_linked_role_arn}${NC} within AWS account ${GREEN}${account}${NC} has been created"
   else
     elb_service_linked_role_arn=$(echo "$elb_service_linked_role" | jq -r .'Role.Arn')
     echo -e "Found the ELB service-linked role ${elb_service_linked_role_arn}, there's no need to create it"

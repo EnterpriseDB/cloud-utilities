@@ -12,11 +12,16 @@ Requires user to pass the database_name (which should be present in his/her envi
 
 # Run Command
 
-    python3 db_name_change.py <database_name> -i <input_file> -o <output_file>
-    e.g.
-    python3 db_name_change.py edb -i utils/superset/pgd_monitoring_template.json  -o utils/superset/upload.json
+    cd cloud-utilities/utils/superset
+    chmod +x db_name_change.py
+    ./db_name_change.py <database_name> -i pgd_monitoring_template.json -o <output_file>
+
+e.g.
+
+    ./db_name_change.py edb -i pgd_monitoring_template.json  -o utils/superset/upload.json
  
 # Usage
+    ./db_name_change.py -h
     usage: db_name_change.py [-h] [-i INPUT_FILE] [-o OUTPUT_FILE] database_name
 
     positional arguments:

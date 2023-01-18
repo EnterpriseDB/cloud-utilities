@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 This script will generate the upload JSON for the entered database name.
 """

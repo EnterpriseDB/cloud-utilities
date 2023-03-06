@@ -36,7 +36,8 @@
         "eks:UpdateAddon",
         "eks:UpdateClusterVersion",
         "eks:UpdateNodegroupConfig",
-        "eks:UpdateNodegroupVersion"
+        "eks:UpdateNodegroupVersion",
+        "eks:UpdateClusterConfig"
       ],
       "Effect": "Allow",
       "Resource": [
@@ -128,35 +129,35 @@
     },
     {
       "Action": [
-          "kms:CreateGrant",
-          "kms:DescribeKey",
-          "kms:EnableKeyRotation",
-          "kms:GetKeyPolicy",
-          "kms:GetKeyRotationStatus",
-          "kms:ListResourceTags",
-          "kms:ScheduleKeyDeletion",
-          "kms:TagResource"
+        "kms:CreateGrant",
+        "kms:DescribeKey",
+        "kms:EnableKeyRotation",
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+        "kms:ListResourceTags",
+        "kms:ScheduleKeyDeletion",
+        "kms:TagResource"
       ],
       "Effect": "Allow",
       "Resource": [
-          "arn:aws:kms:*:*:key/*"
+        "arn:aws:kms:*:*:key/*"
       ],
       "Condition": {
-          "StringEquals": {
-              "aws:ResourceTag/ManagedBy": "BigAnimal"
-          }
+        "StringEquals": {
+          "aws:ResourceTag/ManagedBy": "BigAnimal"
+        }
       }
     },
     {
       "Action": [
-          "kms:DeleteAlias",
-          "kms:UpdateAlias"
+        "kms:DeleteAlias",
+        "kms:UpdateAlias"
       ],
       "Effect": "Allow",
       "Resource": [
-          "arn:aws:kms:*:*:key/*",
-          "arn:aws:kms:*:*:alias/kms-cmk-*",
-          "arn:aws:kms:*:*:alias/telemetry-cmk-*"
+        "arn:aws:kms:*:*:key/*",
+        "arn:aws:kms:*:*:alias/kms-cmk-*",
+        "arn:aws:kms:*:*:alias/telemetry-cmk-*"
       ]
     },
     {

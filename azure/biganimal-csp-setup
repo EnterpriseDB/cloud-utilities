@@ -279,7 +279,7 @@ create_or_update_custom_role()
       create_custom_role
     else
       echo "Fetched role is ${role_id}"
-      update_custom_role
+      retry update_custom_role
     fi
 }
 
@@ -296,7 +296,7 @@ create_ad_sp()
     echo "Update application ${client_id} MS Graph API permissions"
   fi
   echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
-  sleep 1
+  sleep 15
 }
 
 add_spn_owners()

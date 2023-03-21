@@ -411,7 +411,7 @@ download_dependencies
 set_subscription
 show_account
 create_or_update_custom_role
-create_ad_sp
+retry create_ad_sp
 add_spn_owners
 print_and_save_result
 grant_api_permissions

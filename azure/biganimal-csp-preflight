@@ -318,7 +318,7 @@ mgmt_vm_type="Standard_D2_v4"
 mgmt_vm_family="Standard Dv4 Family"
 
 # hardcode EHA proxy workload used VM instance type info
-eha_proxy_vm_type="Standard_F2s_v2"
+eha_proxy_vm_type="Standard_F4s_v2"
 eha_proxy_vm_family="Standard FSv2 Family"
 eha_proxy_instance_type_info=($(_extract_instancetype_info "$eha_proxy_vm_type"))
 pg_eha_proxy_vm_vcpu=${eha_proxy_instance_type_info[0]}
@@ -343,7 +343,7 @@ function need_pg_vcpus_for()
     local architecture=$2
     local replica=1
     [ "$architecture" = "ha" ] && replica=3
-    [ "$architecture" = "eha" ] && replica=5
+    [ "$architecture" = "eha" ] && replica=3
 
     echo $((vcpu*replica))
 }
@@ -353,7 +353,7 @@ function need_pg_eha_proxy_vcpus_for()
     local vcpu=$1
     local architecture=$2
     local replica=0
-    [ "$architecture" = "eha" ] && replica=3
+    [ "$architecture" = "eha" ] && replica=2
 
     echo $((vcpu*replica))
 }

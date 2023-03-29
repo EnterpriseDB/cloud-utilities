@@ -63,6 +63,7 @@ show_help()
   echo "Options:"
   echo "  -d, --display-name: The name of Azure AD App."
   echo "  -s, --subscription: The Azure Subscription ID used by BigAnimal."
+  echo "  -t, --tenant:       [Optional] The Azure AD Tenant ID used by BigAnimal."
   echo "  -y, --years:        [Optional] The Number of years for which the credentials will be valid. Only accept positive integer value. Default: 1 year."
   echo "  -i, --id:           [Optional] The Application (client) ID of Service Principal will be updated."
   echo "  -h, --help:         Show this help."
@@ -76,6 +77,10 @@ check()
   check_az_version
   check_display_name
   check_subscription
+  if [[ -n "${client_id}" && -z "${tenant}" ]]; then
+    suggest "When specifiying the Azure AD Service Principal application ${client_id} you need to specify also the Azure AD tenant with -t|--tenant!" alert
+    exit 1
+  fi
 }
 
 suggest()
@@ -169,6 +174,15 @@ check_subscription()
   fi
 }
 
+check_tenant()
+{
+  if [[ "${tenant}" == "" ]]; then
+    show_help
+    suggest "Error: missing -t, --tenant to specify Azure Tenant" alert
+    exit 1
+  fi
+}
+
 check_years()
 {
   if [[ "${years}" == "" ]]; then
@@ -243,6 +257,11 @@ while [[ $# -gt 0 ]]; do
       check_subscription
       shift 2
       ;;
+    -t|--tenant)
+      tenant="$2"
+      check_tenant
+      shift 2
+      ;;
     -y|--years)
       years="$2"
       check_years
@@ -286,14 +305,23 @@ create_or_update_custom_role()
 create_ad_sp()
 {
   echo "rolename: ${role_name}"
-  # create SPN using azure-cli
+  # create or update SPN using azure-cli
+  years="${years:-1}"
   if [[ -z "${client_id}" ]]; then
     echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-    years="${years:-1}"
     spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
       --role "${role_name}" --scopes /subscriptions/"${subscription}" --years "${years}")
   else
-    echo "Update application ${client_id} MS Graph API permissions"
+    echo "Checking if Azure AD Service Principal application ${client_id} already exists in subscription ${subscription} and tenant ${tenant}..."
+    spn_exist=$(az ad sp list --spn "${client_id}" | jq -r 'length')
+    if (( spn_exist > 0 )); then
+      echo "Updating Azure AD Service Principal application ${client_id} in subscription ${subscription} and tenant ${tenant}..."
+      spn=$(az ad sp credential reset --id "${client_id}" --display-name "${display_name}" --append --years "${years}" --only-show-errors)
+      spn_role=$(az role assignment create --assignee "${client_id}" --role "${role_name}" --scope /subscriptions/"${subscription}" --only-show-errors)
+    else
+      suggest "Azure AD Service Principal application ${client_id} does NOT exists in subscription ${subscription} and tenant ${tenant}!" alert
+      exit 1
+    fi
   fi
   echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
   sleep 15
@@ -302,7 +330,11 @@ create_ad_sp()
 add_spn_owners()
 {
   # add current user and spn to the SPN owner list
-  [[ -z "${client_id}" ]] && client_id=$(echo "${spn}" | jq -r .appId)
+  if [[ -z "${client_id}" ]]; then
+    client_id=$(echo "${spn}" | jq -r .appId)
+  else
+    skip_addowners="true"
+  fi
   # The following checks changes starting from Azure CLI 2.37 due to the usage of MS Graph APIs
   # refers to https://github.com/Azure/azure-cli/issues/22580
   if [ "$msgraphapi" = "false" ]; then
@@ -319,9 +351,13 @@ add_spn_owners()
   az ad app owner add --id "${client_id}" --owner-object-id "${user_object_id}" --only-show-errors
 
   # To add owners to service principal
-  retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
-    --headers Content-Type=application/json --output none \
-    -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
+  # this doesn't need to be done while updating an existing SPN, and if done it fails with
+  # One or more added object references already exist for the following modified properties: 'owners'
+  if [[ -z "${skip_addowners}" ]]; then
+    retry az rest -m POST -u https://graph.microsoft.com/beta/servicePrincipals/"${sp_object_id}"/owners/\$ref \
+      --headers Content-Type=application/json --output none \
+      -b "{\"@odata.id\": \"https://graph.microsoft.com/beta/servicePrincipals/${sp_object_id}\"}"
+  fi
 }
 
 create_custom_role()

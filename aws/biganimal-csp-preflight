@@ -358,7 +358,7 @@ function need_pg_vcpus_for()
     local architecture=$2
     local replica=1
     [ "$architecture" = "ha" ] && replica=3
-    [ "$architecture" = "eha" ] && replica=5
+    [ "$architecture" = "eha" ] && replica=3
 
     echo $((vcpu*replica))
 }
@@ -368,7 +368,7 @@ function need_pg_eha_proxy_vcpus_for()
     local vcpu=$1
     local architecture=$2
     local replica=0
-    [ "$architecture" = "eha" ] && replica=3
+    [ "$architecture" = "eha" ] && replica=2
 
     echo $((vcpu*replica))
 }

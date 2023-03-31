@@ -90,6 +90,15 @@
     },
     {
       "Action": [
+        "ec2:CreateTags",
+        "ec2:DescribeTags",
+        "ec2:DeleteTags"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": [
         "dynamodb:CreateTable",
         "dynamodb:DeleteItem",
         "dynamodb:DescribeContinuousBackups",

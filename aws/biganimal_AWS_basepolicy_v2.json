@@ -138,6 +138,16 @@
       }
     },
     {
+      "Effect": "Allow",
+      "Action": "ec2:DisassociateAddress",
+      "Resource": "*",
+      "Condition": {
+          "StringEquals": {
+              "aws:ResourceTag/ManagedBy": "BigAnimal"
+          }
+      }
+    },
+    {
       "Action": [
         "s3:CreateBucket",
         "s3:DeleteObject",

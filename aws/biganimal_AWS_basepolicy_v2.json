@@ -18,6 +18,7 @@
         "ec2:CreateNetworkAcl",
         "ec2:CreateNetworkAclEntry",
         "ec2:DeleteNetworkAclEntry",
+        "ec2:DisassociateAddress",
         "ec2:CreateRoute",
         "ec2:CreateRouteTable",
         "ec2:CreateSecurityGroup",
@@ -135,16 +136,6 @@
         "StringEquals": {
           "ec2:ResourceTag/ManagedBy": "BigAnimal"
         }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ec2:DisassociateAddress",
-      "Resource": "*",
-      "Condition": {
-          "StringEquals": {
-              "aws:ResourceTag/Topology": "data-plane"
-          }
       }
     },
     {

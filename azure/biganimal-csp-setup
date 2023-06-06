@@ -42,6 +42,7 @@ years=""
 client_id=""
 
 spn=""
+role_id=""
 
 CURRENT_PATH=$(pwd)
 TMPDIR=$(mktemp -d)
@@ -219,14 +220,14 @@ retry ()
   local count=0
   until "$@"; do
     # shellcheck disable=SC2004
-    wait=$((3 ** $count))
+    wait=$((5 ** $count))
     # shellcheck disable=SC2004
     count=$(($count + 1))
     if [ $count -lt $attempts ]; then
       echo "Retrying in $wait seconds..."
       sleep $wait
     else
-      echo "Retried $count attempts with failure, please run below command to add Service Principal Owners by Azure AD Global Administrator or Privileged Role Administrator:"
+      echo "Retried $count attempts with failure, the command/function that has failed is:"
       echo "$@"
       return 0
     fi
@@ -286,20 +287,45 @@ show_account()
 
 create_or_update_custom_role()
 {
-    # get custom role id
-    echo "Create or update custom role"
-    role_name="biganimal-poweruser-${subscription}"
-    roleScope="/subscriptions/${subscription}"
-    role_id=$(az role definition list --only-show-errors --query "[?roleName=='${role_name}'].id" -o tsv)
-    jq --arg rolename "$role_name" --arg scope "$roleScope" '(.Name) |= $rolename | (.assignableScopes[]) |= $scope' \
-      "${CURRENT_PATH}"/biganimal-poweruser-template.json > "${CURRENT_PATH}"/biganimal-poweruser.json
-    if [[ -z "${role_id}" ]]; then
-      echo "Did not find the custom role, creating it..."
-      create_custom_role
-    else
-      echo "Fetched role is ${role_id}"
-      retry update_custom_role
-    fi
+  # get custom role id
+  echo "Create or update custom role"
+  role_name="biganimal-poweruser-${subscription}"
+  roleScope="/subscriptions/${subscription}"
+  role_id=$(az role definition list --only-show-errors --query "[?roleName=='${role_name}'].id" -o tsv)
+  jq --arg rolename "$role_name" --arg scope "$roleScope" '(.Name) |= $rolename | (.assignableScopes[]) |= $scope' \
+    "${CURRENT_PATH}"/biganimal-poweruser-template.json > "${CURRENT_PATH}"/biganimal-poweruser.json
+  if [[ -z "${role_id}" ]]; then
+    echo "Did not find the custom role, creating it..."
+    create_custom_role
+  else
+    echo "Fetched role is ${role_id}"
+    retry update_custom_role
+  fi
+}
+
+wait_for_custom_role()
+{
+  role_name="biganimal-poweruser-${subscription}"
+  role_id=$(az role definition list --only-show-errors --query "[?roleName=='${role_name}'].id" -o tsv)
+  if [[ -z "${role_id}" ]]; then
+    echo "Did not find the custom role, checking again in a while..."
+    return 1
+  else
+    echo "Custom role exists with ID ${role_id}, proceeding..."
+    return 0
+  fi
+}
+
+check_custom_role()
+{
+  # check for custom role existance
+  # sometimes Azure AD requires time to propagate it as staten here
+  # https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting?source=recommendations&tabs=bicep#symptom---assigning-a-role-to-a-new-principal-sometimes-fails
+  retry wait_for_custom_role
+  if [[ -z "${role_id}" ]]; then
+    suggest "The Azure AD Custom Role creation/replication has not completed successfully! Please retry in a few minutes..." alert
+    exit 1
+  fi
 }
 
 create_ad_sp()
@@ -447,6 +473,7 @@ download_dependencies
 set_subscription
 show_account
 create_or_update_custom_role
+check_custom_role
 retry create_ad_sp
 add_spn_owners
 print_and_save_result

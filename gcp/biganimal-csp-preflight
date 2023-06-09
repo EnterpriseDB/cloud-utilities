@@ -1,0 +1,588 @@
+#!/usr/bin/env bash
+#
+# Copyright 2022 EnterpriseDB Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script is used as a preflight check to tell if the given region
+# in your GCP project can meet the requirement for BigAnimal to create the
+# PostgreSQL cluster in.
+#
+# Given one the below input:
+#   - (mandatory) GCP project ID
+#   - (mandatory) region
+#   - PostgreSQL cluster's instance type
+#   - whether the HA (High Availability) is used for the PostgreSQL cluster
+#   - whether the EHA (Extreme High Availability) is used for the PostgreSQL cluster
+#   - network type (private, or public)
+# it checks the below requirement:
+#   - the gcloud CLI is configured with access to the specified project ID
+#   - the given region:
+#     * if there is enough Compute related quotas left for this PostgreSQL cluster type
+#       in your GCP Project
+#     * if there is enough Network related quotas left to expose the service
+#       for you to access the PostgreSQL cluster
+#
+# The output of this script tells any unsatisfied condition and report in the form
+# of table.
+#
+# For more details, please refer to:
+#  https://www.enterprisedb.com/docs/biganimal/latest/getting_started/01_check_resource_limits
+#
+set -e
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+[ "${BASH_VERSINFO:-0}" -lt 4 ] && echo -e "${RED}This script does not support Bash version 3 and below!${NC}" && show_help && exit 1
+CURRENT_PATH=$(pwd)
+
+function show_help()
+{
+    echo -e "Usage: ${GREEN}$0 [options] <project-id> <region>${NC}"
+    echo ""
+    echo "Arguments:"
+    echo "    <project-id>                GCP project ID for BigAnimal deployment"
+    echo "    <region>                    GCP region for BigAnimal deployment"
+    echo
+    echo "Options:"
+    echo "    -h, --help                  Print this help message"
+    echo "    -i, --instance-type         GCP Instance Type for BigAnimal cluster, e.g., n2-standard-2"
+    echo "    -x, --cluster-architecture  Defines the Cluster architecture and can be [ single | ha | eha ]"
+    echo "    -e, --endpoint              Network endpoint flavor for BigAnimal cluster"
+    echo "    -r, --activate-region       Include region activation, if no clusters exist in region"
+    echo "    --onboard                   Check if the user and account are configured appropriately"
+    echo
+    echo "Behavior defaults to --onboard if no other options provided."
+    echo
+    echo "Examples:"
+    echo "    $0 --onboard my-sample-project-191923 us-east1"
+    echo "    $0 -i n2-standard-4 -x ha -e private -r my-sample-project-191923 us-east1"
+    echo
+    echo "Available regions are: "
+    echo -e "  ${GREEN}${AVAILABLE_REGIONS[@]}${NC}"
+    echo "Available instance types are: "
+    echo -e "  ${GREEN}${AVAILABLE_INSTANCETYPE[@]}${NC}"
+    echo "Available endpoint flavors are: "
+    echo -e "  ${GREEN}${AVAILABLE_ENDPOINTS[@]}${NC}"
+    echo ""
+}
+
+function suggest()
+{
+    local what=$1
+    local highlight=$2
+
+    if [ "$highlight" = 'alert' ]; then
+        echo -e "${RED}${what}${NC}"
+    else
+        echo -e "${GREEN}${what}${NC}"
+    fi
+}
+
+AVAILABLE_ENDPOINTS=(
+  public
+  private
+)
+
+AVAILABLE_REGIONS=(
+  asia-east1
+  asia-east2
+  asia-northeast1
+  asia-northeast2
+  asia-northeast3
+  asia-south1
+  asia-south2
+  asia-southeast1
+  asia-southeast2
+  australia-southeast1
+  australia-southeast2
+  europe-central2
+  europe-north1
+  europe-southwest1
+  europe-west1
+  europe-west2
+  europe-west3
+  europe-west4
+  europe-west6
+  europe-west8
+  europe-west9
+  me-west1
+  northamerica-northeast1
+  northamerica-northeast2
+  southamerica-east1
+  southamerica-west1
+  us-central1
+  us-east1
+  us-east4
+  us-east5
+  us-south1
+  us-west1
+  us-west2
+  us-west3
+  us-west4
+)
+
+AVAILABLE_INSTANCETYPE=(
+  e2-standard-4
+  e2-standard-8
+  e2-standard-16
+  e2-standard-32
+  e2-highmem-4
+  e2-highmem-8
+  e2-highmem-16
+  e2-highcpu-4
+  e2-highcpu-8
+  e2-highcpu-16
+  e2-highcpu-32
+  n2-standard-2
+  n2-standard-4
+  n2-standard-8
+  n2-standard-16
+  n2-standard-32
+  n2-standard-48
+  n2-standard-64
+  n2-standard-80
+  n2-standard-96
+  n2-standard-128
+  n2-highmem-2
+  n2-highmem-4
+  n2-highmem-8
+  n2-highmem-16
+  n2-highmem-32
+  n2-highmem-64
+  n2-highmem-80
+  n2-highmem-96
+  n2-highmem-128
+  n2-highcpu-2
+  n2-highcpu-4
+  n2-highcpu-8
+  n2-highcpu-16
+  n2-highcpu-32
+  n2-highcpu-48
+  n2-highcpu-64
+  n2-highcpu-80
+  n2-highcpu-96
+  n2d-standard-2
+  n2d-standard-4
+  n2d-standard-8
+  n2d-standard-16
+  n2d-standard-32
+  n2d-standard-48
+  n2d-standard-64
+  n2d-standard-80
+  n2d-standard-96
+  n2d-standard-128
+  n2d-standard-224
+  n2d-highmem-2
+  n2d-highmem-4
+  n2d-highmem-8
+  n2d-highmem-16
+  n2d-highmem-32
+  n2d-highmem-64
+  n2d-highmem-80
+  n2d-highmem-96
+  n2d-highcpu-2
+  n2d-highcpu-4
+  n2d-highcpu-8
+  n2d-highcpu-16
+  n2d-highcpu-32
+  n2d-highcpu-48
+  n2d-highcpu-64
+  n2d-highcpu-80
+  n2d-highcpu-96
+  n2d-highcpu-128
+  n2d-highcpu-224
+  t2a-standard-2
+  t2a-standard-4
+  t2a-standard-8
+  t2a-standard-16
+  t2a-standard-32
+  t2a-standard-48
+  n1-standard-2
+  n1-standard-4
+  n1-standard-8
+  n1-standard-16
+  n1-standard-32
+  n1-standard-64
+  n1-standard-96
+  n1-highmem-2
+  n1-highmem-4
+  n1-highmem-8
+  n1-highmem-16
+  n1-highmem-32
+  n1-highmem-64
+  n1-highmem-96
+  n1-highcpu-4
+  n1-highcpu-8
+  n1-highcpu-16
+  n1-highcpu-32
+  n1-highcpu-64
+  n1-highcpu-96
+  c2-standard-4
+  c2-standard-8
+  c2-standard-16
+  c2-standard-30
+  c2-standard-60
+  m1-ultramem-40
+  m1-ultramem-80
+  m1-ultramem-160
+  m1-megamem-96
+  m2-ultramem-208
+  m2-ultramem-416
+  m2-megamem-416
+  m2-hypermem-416
+)
+
+function _toLower()
+{
+    echo "${1,,}"
+}
+
+function _toUpper()
+{
+    echo "${1^^}"
+}
+
+function _extract_instancetype_info()
+{
+    local instance_type=$(_toLower "$1")
+
+    # extract vcpu/vm_class/vm_family from the given instance_type
+    local family=""
+    local class=""
+    local vcpu=0
+
+    # given "n2-standard-16", the regex pattern is (n2)-(standard)-(16)
+    if [[ "${instance_type}" =~ ([a-z][0-9][a-z]*)-([a-z]*)-([0-9]*) ]]; then
+      family="${BASH_REMATCH[1]}"
+      class="${BASH_REMATCH[2]}"
+      vcpu="${BASH_REMATCH[3]}"
+
+    else
+      suggest "Error: unsupported instance type: $1" alert
+      exit 1
+    fi
+
+    echo "$vcpu" "$instance_type" "$class" "$family"
+    return 0
+}
+
+# Default values for onboarding
+endpoint="public"
+instance_type="n2-standard-2"
+architecture="single"
+activate=false
+onboard=false
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  key="$1"
+
+  case $key in
+    -i|--instance-type)
+      instance_type="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -e|--endpoint)
+      endpoint="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -x|--cluster-architecture)
+      architecture="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -r|--activate-region)
+      activate=true
+      shift # past argument
+      ;;
+    --onboard)
+      onboard=true
+      activate=true
+      shift # past argument
+      ;;
+    -h|--help)
+      show_help
+      exit 1
+      ;;
+    *)    # unknown option
+      POSITIONAL+=("$1") # save it in an array for later
+      shift # past argument
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+project=$1
+region=$2
+
+[ -z "$project" ] && suggest "<project-id> is a required option!" alert && show_help && exit 1
+[ "$architecture" != "single" ] && [ "$architecture" != "ha" ] && [ "$architecture" != "eha" ] \
+    && suggest "cluster-architecture can be only 'single', 'ha' or 'eha'!" alert && show_help && exit 1
+# check that the gcloud cli is configured to work with the given project and we have access to
+set +e
+current_project=$(gcloud config get-value project)
+[ $? -ne 0 ] && suggest "Error while checking GCP credentials/profile configuration, please init/configure your gcloud CLI session/profile" alert \
+    && show_help && exit 1
+set -e
+[[ ! "${current_project}" = "$project" ]] && suggest "Error: gcloud CLI not configured to work with the requested project $project!" alert \
+    && suggest "The configured project ID is ${current_project}!" alert && show_help && exit 1
+
+[ -z "$region" ] && show_help && exit 1
+[[ ! " ${AVAILABLE_REGIONS[@]}" =~ "${region}" ]] \
+    && suggest "Error: unsupported region - ${region}" alert \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_INSTANCETYPE[@]}" =~ "${instance_type}" ]] \
+    && suggest "Error: unsupported Postgres instance type - ${instance_type}" alert \
+    && show_help \
+    && exit 1
+[[ ! " ${AVAILABLE_ENDPOINTS[@]}" =~ "${endpoint}" ]] \
+    && suggest "Error: invalid endpoint flavor - ${endpoint}" alert \
+    && show_help \
+    && exit 1
+
+# extract postgres workload used VM instance type info
+instance_type_info=($(_extract_instancetype_info "$instance_type"))
+pg_vm_vcpu=${instance_type_info[0]}
+pg_vm_type=${instance_type_info[1]}
+
+# hardcode management workload used VM instance type info
+mgmt_vm_vcpu=2
+mgmt_vm_instances=3
+mgmt_vm_type="n2-standard-2"
+mgmt_public_ips=1
+mgmt_router=1
+
+# hardcode EHA proxy workload used VM instance type info
+ehaproxy_vm_type="c2-standard-2"
+pg_eha_proxy_vm_vcpu=2
+
+function infra_vcpus()
+{
+    [ "$activate" = "true" ] && echo $((mgmt_vm_vcpu*mgmt_vm_instances)) || echo 0
+}
+
+function need_public_ip()
+{
+    [ "$activate" = "true" ] && echo $mgmt_public_ips || echo 0
+}
+
+function need_router()
+{
+    [ "$activate" = "true" ] && echo $mgmt_router || echo 0
+}
+
+function need_vpc()
+{
+    [ "$activate" = "true" ] && echo 1 || echo 0
+}
+
+function need_pg_vcpus_for()
+{
+    local vcpu=$1
+    local architecture=$2
+    local replica=1
+    [ "$architecture" = "ha" ] && replica=3
+    [ "$architecture" = "eha" ] && replica=3
+
+    echo $((vcpu*replica))
+}
+
+function need_pg_eha_proxy_vcpus_for()
+{
+    local vcpu=$1
+    local architecture=$2
+    local replica=0
+    [ "$architecture" = "eha" ] && replica=2
+
+    echo $((vcpu*replica))
+}
+
+TMPDIR=$(mktemp -d)
+
+function _onexit {
+  #### Print Final Suggestions Result
+  echo ""
+  echo "#######################"
+  echo "# Overall Suggestions #"
+  echo "#######################"
+  echo ""
+  echo -e "$(cat "$TMP_SUGGESTION")"
+
+  echo ""
+  echo "Please use the Quotas page in the Google Cloud console if need to raise any service quota limits."
+  echo "See https://cloud.google.com/docs/quota_detail/view_manage#requesting_higher_quota for more info."
+
+  rm -rf "${TMPDIR}"
+  [ -n "$ba_preflight" ] && exit 2
+  exit 0
+}
+trap _onexit EXIT
+pushd "${TMPDIR}" > /dev/null 2>&1 || exit
+
+TMP_SUGGESTION=$TMPDIR/suggestions_$$
+touch "$TMP_SUGGESTION"
+
+function store_suggestion()
+{
+    echo "$1" >> "$TMP_SUGGESTION"
+}
+
+#### Check gcloud CLI version
+function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+function check_gcloud_version {
+  fullcliversion=$(gcloud --version)
+  cliversionstripped=${fullcliversion%%$'\n'*}
+  cliversion=${cliversionstripped##* }
+  if [[ "$GOOGLE_CLOUD_SHELL" == "true" ]]; then
+    suggest "Run GCP Preflight Checks with gcloud cli ${cliversion} in GCP CloudShell" ok
+  else
+    [ "$(version "$cliversion")" -lt "$(version "428.0.0")" ] && echo -e "${RED}Error: upgrade gcloud cli to 428.0.0 or later${NC}" && exit 1
+    suggest "Run GCP Preflight Checks with gcloud cli ${cliversion}" ok
+  fi
+}
+check_gcloud_version
+
+function validate_project() {
+  # check that the gcloud cli is configured to work with the given project and we have access to
+  set +e
+  current_project=$(gcloud config get-value project)
+  if [ $? -ne 0 ]; then
+    echo -e "${RED}Error while checking GCP credentials/profile configuration, please init/configure your gcloud CLI session/profile${NC}"
+    show_help
+    exit 1
+  fi
+  set -e
+  if [[ ! "${current_project}" == "$1" ]]; then
+    echo -e "${RED}Error: gcloud CLI not configured to work with the requested project $1!${NC}"
+    echo -e "${RED}The configured project ID is ${current_project}!${NC}"
+    show_help
+    exit 1
+  fi
+  store_suggestion "Make sure the GCP Project ID ${GREEN}$1${NC} is the one that you want to use for BigAnimal"
+}
+
+#### GCP User Role Assignment Checking
+function validate_role_assignment() {
+  # TODO
+  # check if gcloud CLI has something to verify the IAM permissions assigned to the
+  # user/role/token that is being used to make the GCP API calls
+  # was looking at
+  # gcloud organizations get-iam-policy
+  # like: gcloud organizations get-iam-policy <ORGANIZATION_ID> \
+  #   --filter="bindings.members:<USER@DOMAIN.COM>" --flatten="bindings[].members" --format="table(bindings.role)"
+  # but maybe this not make really sense because you need to have also IAM rights
+  # to query for IAM itself like organizations.getIamPolicy that are not really
+  # needed to be able to use execute the preflight or the setup-csp script
+  store_suggestion "Make sure the GCP account used ${GREEN}$1${NC} has rights to create custom roles, service accounts, keys and assign project grants"
+}
+
+function check_onboard() {
+  #### GCP Project Checking
+  validate_project "$project"
+  current_gcp_user=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
+  validate_role_assignment "$current_gcp_user"
+}
+
+[ "$onboard" = "true" ] && check_onboard
+
+echo ""
+echo "##############################################"
+echo -e "Checking Service Quotas Limits on ${GREEN}$region${NC}..."
+echo "##############################################"
+echo ""
+# getting resources current usage
+# on MacOS using full path so this script works also with GNU core utilities installed (coreutils)
+if [[ $OSTYPE == 'darwin'* ]]; then
+  start_time=$(/bin/date -j -v-3H '+%Y-%m-%dT%H:%M:%S')
+else
+  start_time=$(date -d "3 hours ago" '+%Y-%m-%dT%H:%M:%S')
+fi
+end_time=$(date '+%Y-%m-%dT%H:%M:%S')
+
+# getting service quota usage and limits
+cpu_quota_code="CPUS"
+cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${cpu_quota_code}\") | .quotas.usage")
+cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${cpu_quota_code}\") | .quotas.limit")
+
+ip_quota_code="STATIC_ADDRESSES"
+ip_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${ip_quota_code}\") | .quotas.usage")
+ip_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${ip_quota_code}\") | .quotas.limit")
+
+vpc_quota_code="NETWORKS"
+vpc_usage=$(gcloud compute project-info describe --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${vpc_quota_code}\") | .quotas.usage")
+vpc_quota=$(gcloud compute project-info describe --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${vpc_quota_code}\") | .quotas.limit")
+
+router_quota_code="ROUTERS"
+router_usage=$(gcloud compute project-info describe --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${router_quota_code}\") | .quotas.usage")
+router_quota=$(gcloud compute project-info describe --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${router_quota_code}\") | .quotas.limit")
+
+# calculate required resources
+need_mgmt_vcpus=$(infra_vcpus)
+need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
+need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
+need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
+need_ip=$(need_public_ip)
+need_router=$(need_router)
+need_vpc=$(need_vpc)
+shared_mgmt_eha_proxy_vcpus=0
+
+if [ "$mgmt_vm_type" = "$ehaproxy_vm_type" ]; then
+    shared_mgmt_eha_proxy_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
+fi
+
+# calculate gap of "quota - used - need" (that corresponds to "available - need")
+gap_regional_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_regional_vcpus))
+gap_ip=$((${ip_quota%.*} - ${ip_usage%.*} - need_ip))
+gap_vpc=$((${vpc_quota%.*} - ${vpc_usage%.*} - need_vpc))
+gap_router=$((${router_quota%.*} - ${router_usage%.*} - need_router))
+
+function quota_suggest()
+{
+    local gap=$1
+    local resource=$2
+    local quota=$3
+    if [ "$gap" -lt 0 ]; then
+        store_suggestion "Resource '${GREEN}$resource${NC}' quota in '${GREEN}$region${NC}' needs to be increased to '${RED}$((quota-gap))${NC}'"
+        suggest "Increase Quota by ${gap:1}" alert
+    else
+        suggest "OK" ok
+    fi
+}
+
+# print region resources service quota limits checking result
+FMT="%-21s %-37s %-8s %-8s %-11s %-8s %-11b\n"
+printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestion"
+printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
+[ "$shared_mgmt_eha_proxy_vcpus" -gt 0 ] && need_mgmt_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
+printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
+printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
+[ "$shared_mgmt_eha_proxy_vcpus" -eq 0 ] && [ "$need_pg_eha_proxy_vcpus" -gt 0 ] && \
+printf "$FMT" "$ehaproxy_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_eha_proxy_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
+printf "$FMT" "Static IP Addresses" "${ip_quota_code}" ${ip_quota%.*} ${ip_usage} ${need_ip} ${gap_ip} "$(quota_suggest $gap_ip "${ip_quota_code}" "${ip_quota%.*}")"
+printf "$FMT" "VPCs" "${vpc_quota_code}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code}" "${vpc_quota%.*}")"
+printf "$FMT" "Cloud Routers" "${router_quota_code}" ${router_quota%.*} ${router_usage%.*} ${need_router} ${gap_router} "$(quota_suggest $gap_router "${router_quota_code}" "${router_quota%.*}")"
+echo ""
+echo "Note: the listed Instance Types are referring to the same CPU Regional Quota."

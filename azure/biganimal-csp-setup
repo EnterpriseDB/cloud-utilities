@@ -42,6 +42,7 @@ years=""
 client_id=""
 
 spn=""
+app_id=""
 role_id=""
 
 CURRENT_PATH=$(pwd)
@@ -328,15 +329,29 @@ check_custom_role()
   fi
 }
 
+wait_for_spn()
+{
+  spn_exist=$(az ad sp list --spn "${app_id}" | jq -r 'length')
+  if (( spn_exist > 0 )); then
+    echo "Updating Azure AD Service Principal application ${app_id} and configuring its access to Azure resources in subscription ${subscription}..."
+    spn_role=$(az role assignment create --assignee "${app_id}" --role "${role_name}" --scope /subscriptions/"${subscription}" --only-show-errors)
+    return 0
+  else
+    echo "Did not find the SPN, checking again in a while..."
+    return 1
+  fi
+}
+
 create_ad_sp()
 {
   echo "rolename: ${role_name}"
   # create or update SPN using azure-cli
   years="${years:-1}"
   if [[ -z "${client_id}" ]]; then
-    echo "Creating Azure AD Service Principal and configuring its access to Azure resources in subscription ${subscription}..."
-    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors \
-      --role "${role_name}" --scopes /subscriptions/"${subscription}" --years "${years}")
+    echo "Creating Azure AD Service Principal in subscription ${subscription}..."
+    spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors --years "${years}")
+    app_id=$(echo "${spn}" | jq -r .appId)
+    retry wait_for_spn
   else
     echo "Checking if Azure AD Service Principal application ${client_id} already exists in subscription ${subscription} and tenant ${tenant}..."
     spn_exist=$(az ad sp list --spn "${client_id}" | jq -r 'length')
@@ -474,7 +489,7 @@ set_subscription
 show_account
 create_or_update_custom_role
 check_custom_role
-retry create_ad_sp
+create_ad_sp
 add_spn_owners
 print_and_save_result
 grant_api_permissions

@@ -458,6 +458,11 @@ function check_onboard() {
 
 [ "$onboard" = "true" ] && check_onboard
 
+# check if the region is enabled
+if [ "$(aws ec2 describe-regions  --output text --query "Regions[?RegionName=='$region'].RegionName")" != "$region" ]; then
+  suggest "error: The region $region is disabled" alert && exit 1
+fi
+
 echo ""
 echo "##############################################"
 echo -e "Checking Service Quotas Limits on ${GREEN}$region${NC}..."

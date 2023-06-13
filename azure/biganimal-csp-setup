@@ -42,6 +42,7 @@ years=""
 client_id=""
 
 spn=""
+spn_role=""
 app_id=""
 role_id=""
 
@@ -335,6 +336,10 @@ wait_for_spn()
   if (( spn_exist > 0 )); then
     echo "Updating Azure AD Service Principal application ${app_id} and configuring its access to Azure resources in subscription ${subscription}..."
     spn_role=$(az role assignment create --assignee "${app_id}" --role "${role_name}" --scope /subscriptions/"${subscription}" --only-show-errors)
+    if [[ -z "${spn_role}" ]]; then
+      echo "Did not find the role, Azure may need some time to replicate the role, checking again in a while..."
+      return 1
+    fi
     return 0
   else
     echo "Did not find the SPN, checking again in a while..."
@@ -352,6 +357,11 @@ create_ad_sp()
     spn=$(az ad sp create-for-rbac -o json -n "${display_name}" --only-show-errors --years "${years}")
     app_id=$(echo "${spn}" | jq -r .appId)
     retry wait_for_spn
+    if [[ -z "${spn_role}" ]]; then
+      suggest "cannot find the role ${role_name}, Azure may need more minutes to replicate the role" alert
+      suggest "please wait for the role ${role_name} replication, clean up the SPN ${display_name} and retry later" alert
+      exit 1
+    fi
   else
     echo "Checking if Azure AD Service Principal application ${client_id} already exists in subscription ${subscription} and tenant ${tenant}..."
     spn_exist=$(az ad sp list --spn "${client_id}" | jq -r 'length')
@@ -364,8 +374,6 @@ create_ad_sp()
       exit 1
     fi
   fi
-  echo "Waiting 15 seconds for Azure AD Service Principal to propagate..."
-  sleep 15
 }
 
 add_spn_owners()

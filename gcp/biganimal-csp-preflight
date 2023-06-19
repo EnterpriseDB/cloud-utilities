@@ -434,6 +434,7 @@ function _onexit {
 trap _onexit EXIT
 pushd "${TMPDIR}" > /dev/null 2>&1 || exit
 
+TMP_API_OUTPUT=$TMPDIR/apis_$$
 TMP_SUGGESTION=$TMPDIR/suggestions_$$
 touch "$TMP_SUGGESTION"
 
@@ -500,19 +501,63 @@ function check_onboard() {
 
 [ "$onboard" = "true" ] && check_onboard
 
+#### GCP googleapis Checking
+REQUIRED_APIS=(
+  "autoscaling.googleapis.com"
+  "cloudapis.googleapis.com"
+  "compute.googleapis.com"
+  "container.googleapis.com"
+  "iam.googleapis.com"
+  "iamcredentials.googleapis.com"
+  "run.googleapis.com"
+  "secretmanager.googleapis.com"
+  "storage.googleapis.com"
+  "vpcaccess.googleapis.com"
+)
+
+function api_suggest()
+{
+  local st=$1
+  local what=$2
+  if [ "$st" = "Enabled" ]; then
+      suggest "$st" ok
+  else
+      suggest "$st" alert
+  fi
+}
+
+echo ""
+echo "####################################"
+echo "# Checking for enabled GCP APIs... #"
+echo "####################################"
+echo ""
+gcloud services list > "$TMP_API_OUTPUT"
+
+# print the apis checking result
+FMT="%-40s %-10s\n"
+printf "$FMT" "NAME"                                    "RESULT"
+printf "$FMT" "---------------------------------------" "---------"
+
+api_missing=false
+for required_api in ${REQUIRED_APIS[@]}; do
+  enabled_state="Disabled"
+  if grep "$required_api" $TMP_API_OUTPUT -q; then
+    enabled_state="Enabled"
+  fi
+  if [ $enabled_state == "Disabled" ]; then api_missing=true; fi
+  printf "$FMT" "$required_api" $(api_suggest "$enabled_state" "$required_api")
+done
+
+if [ $api_missing = true ]; then
+    store_suggestion "${RED}Enable all required APIs before continue${NC}"
+    exit 1
+fi
+
 echo ""
 echo "##############################################"
 echo -e "Checking Service Quotas Limits on ${GREEN}$region${NC}..."
 echo "##############################################"
 echo ""
-# getting resources current usage
-# on MacOS using full path so this script works also with GNU core utilities installed (coreutils)
-if [[ $OSTYPE == 'darwin'* ]]; then
-  start_time=$(/bin/date -j -v-3H '+%Y-%m-%dT%H:%M:%S')
-else
-  start_time=$(date -d "3 hours ago" '+%Y-%m-%dT%H:%M:%S')
-fi
-end_time=$(date '+%Y-%m-%dT%H:%M:%S')
 
 # getting service quota usage and limits
 cpu_quota_code="CPUS"

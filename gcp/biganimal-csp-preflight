@@ -359,6 +359,7 @@ set -e
 instance_type_info=($(_extract_instancetype_info "$instance_type"))
 pg_vm_vcpu=${instance_type_info[0]}
 pg_vm_type=${instance_type_info[1]}
+pg_vm_family=${instance_type_info[3]}
 
 # hardcode management workload used VM instance type info
 mgmt_vm_vcpu=2
@@ -368,7 +369,7 @@ mgmt_public_ips=1
 mgmt_router=1
 
 # hardcode EHA proxy workload used VM instance type info
-ehaproxy_vm_type="c2-standard-2"
+ehaproxy_vm_type="c2d-standard-2"
 pg_eha_proxy_vm_vcpu=2
 
 function infra_vcpus()
@@ -560,11 +561,29 @@ echo "##############################################"
 echo ""
 
 # getting service quota usage and limits
-cpu_quota_code="CPUS"
+cpu_quota_code="CPUS" #Serverless VPC Access Connector with instance type e2-micro
 cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${cpu_quota_code}\") | .quotas.usage")
 cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${cpu_quota_code}\") | .quotas.limit")
+
+n2_cpu_quota_code="N2_CPUS" #GKE default nodes with instance type n2-standard-2
+n2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${n2_cpu_quota_code}\") | .quotas.usage")
+n2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${n2_cpu_quota_code}\") | .quotas.limit")
+
+c2_cpu_quota_code="C2D_CPUS" #GKE EHA proxy nodes with instance type c2d-standard-2
+c2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${c2_cpu_quota_code}\") | .quotas.usage")
+c2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${c2_cpu_quota_code}\") | .quotas.limit")
+
+pg_cpu_quota_code="${pg_vm_family^^}_CPUS"
+pg_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${pg_cpu_quota_code}\") | .quotas.usage")
+pg_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
+  --format json | jq -r ".[] | select(.quotas.metric == \"${pg_cpu_quota_code}\") | .quotas.limit")
 
 ip_quota_code="STATIC_ADDRESSES"
 ip_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
@@ -588,7 +607,7 @@ router_quota=$(gcloud compute project-info describe --project "$project" --flatt
 need_mgmt_vcpus=$(infra_vcpus)
 need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
 need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
-need_regional_vcpus=$((need_mgmt_vcpus + need_pg_vcpus + need_pg_eha_proxy_vcpus))
+need_serverless_vcpus=2
 need_ip=$(need_public_ip)
 need_router=$(need_router)
 need_vpc=$(need_vpc)
@@ -599,7 +618,10 @@ if [ "$mgmt_vm_type" = "$ehaproxy_vm_type" ]; then
 fi
 
 # calculate gap of "quota - used - need" (that corresponds to "available - need")
-gap_regional_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_regional_vcpus))
+gap_mgmt_vcpus=$((${n2_cpu_quota%.*} - ${n2_cpu_usage%.*} - need_mgmt_vcpus))
+gap_pg_vcpus=$((${pg_cpu_quota%.*} - ${pg_cpu_usage%.*} - need_pg_vcpus))
+gap_ehaproxy_vcpus=$((${c2_cpu_quota%.*} - ${c2_cpu_usage%.*} - need_pg_eha_proxy_vcpus))
+gap_serverless_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_serverless_vcpus))
 gap_ip=$((${ip_quota%.*} - ${ip_usage%.*} - need_ip))
 gap_vpc=$((${vpc_quota%.*} - ${vpc_usage%.*} - need_vpc))
 gap_router=$((${router_quota%.*} - ${router_usage%.*} - need_router))
@@ -622,10 +644,11 @@ FMT="%-21s %-37s %-8s %-8s %-11s %-8s %-11b\n"
 printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestion"
 printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
 [ "$shared_mgmt_eha_proxy_vcpus" -gt 0 ] && need_mgmt_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
-printf "$FMT" "$mgmt_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_mgmt_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
-printf "$FMT" "$pg_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
+printf "$FMT" "$mgmt_vm_type vCPUs" "${n2_cpu_quota_code}" ${n2_cpu_quota%.*} ${n2_cpu_usage%.*} ${need_mgmt_vcpus} ${gap_mgmt_vcpus} "$(quota_suggest $gap_mgmt_vcpus "${n2_cpu_quota_code}" "${n2_cpu_quota%.*}")"
+printf "$FMT" "$pg_vm_type vCPUs" "${pg_cpu_quota_code}" ${pg_cpu_quota%.*} ${pg_cpu_usage%.*} ${need_pg_vcpus} ${gap_pg_vcpus} "$(quota_suggest $gap_pg_vcpus "${pg_cpu_quota_code}" "${pg_cpu_quota%.*}")"
 [ "$shared_mgmt_eha_proxy_vcpus" -eq 0 ] && [ "$need_pg_eha_proxy_vcpus" -gt 0 ] && \
-printf "$FMT" "$ehaproxy_vm_type vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_pg_eha_proxy_vcpus} ${gap_regional_vcpus} "$(quota_suggest $gap_regional_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
+printf "$FMT" "$ehaproxy_vm_type vCPUs" "${c2_cpu_quota_code}" ${c2_cpu_quota%.*} ${c2_cpu_usage%.*} ${need_pg_eha_proxy_vcpus} ${gap_ehaproxy_vcpus} "$(quota_suggest $gap_ehaproxy_vcpus "${c2_cpu_quota_code}" "${c2_cpu_quota%.*}")"
+printf "$FMT" "Shared-Core vCPUs" "${cpu_quota_code}" ${cpu_quota%.*} ${cpu_usage%.*} ${need_serverless_vcpus} ${gap_serverless_vcpus} "$(quota_suggest $gap_serverless_vcpus "${cpu_quota_code}" "${cpu_quota%.*}")"
 printf "$FMT" "Static IP Addresses" "${ip_quota_code}" ${ip_quota%.*} ${ip_usage} ${need_ip} ${gap_ip} "$(quota_suggest $gap_ip "${ip_quota_code}" "${ip_quota%.*}")"
 printf "$FMT" "VPCs" "${vpc_quota_code}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code}" "${vpc_quota%.*}")"
 printf "$FMT" "Cloud Routers" "${router_quota_code}" ${router_quota%.*} ${router_usage%.*} ${need_router} ${gap_router} "$(quota_suggest $gap_router "${router_quota_code}" "${router_quota%.*}")"

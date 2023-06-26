@@ -103,7 +103,9 @@ AVAILABLE_REGIONS=(
   ap-northeast-2
   ap-southeast-1
   ap-southeast-2
+  ap-southeast-3
   ap-south-1
+  ap-south-2
   ca-central-1
   eu-central-1
   eu-west-1
@@ -455,6 +457,11 @@ function check_onboard() {
 }
 
 [ "$onboard" = "true" ] && check_onboard
+
+# check if the region is enabled
+if [ "$(aws ec2 describe-regions  --output text --query "Regions[?RegionName=='$region'].RegionName")" != "$region" ]; then
+  suggest "error: The region $region is disabled" alert && exit 1
+fi
 
 echo ""
 echo "##############################################"

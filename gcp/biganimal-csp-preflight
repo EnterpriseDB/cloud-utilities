@@ -369,7 +369,7 @@ mgmt_public_ips=1
 mgmt_router=1
 
 # hardcode EHA proxy workload used VM instance type info
-ehaproxy_vm_type="c2d-standard-2"
+ehaproxy_vm_type="n2-standard-2"
 pg_eha_proxy_vm_vcpu=2
 
 function infra_vcpus()
@@ -573,12 +573,6 @@ n2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --
 n2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${n2_cpu_quota_code}\") | .quotas.limit")
 
-c2_cpu_quota_code="C2D_CPUS" #GKE EHA proxy nodes with instance type c2d-standard-2
-c2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
-  --format json | jq -r ".[] | select(.quotas.metric == \"${c2_cpu_quota_code}\") | .quotas.usage")
-c2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
-  --format json | jq -r ".[] | select(.quotas.metric == \"${c2_cpu_quota_code}\") | .quotas.limit")
-
 pg_cpu_quota_code="${pg_vm_family^^}_CPUS"
 pg_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${pg_cpu_quota_code}\") | .quotas.usage")
@@ -618,9 +612,9 @@ if [ "$mgmt_vm_type" = "$ehaproxy_vm_type" ]; then
 fi
 
 # calculate gap of "quota - used - need" (that corresponds to "available - need")
-gap_mgmt_vcpus=$((${n2_cpu_quota%.*} - ${n2_cpu_usage%.*} - need_mgmt_vcpus))
+gap_mgmt_vcpus=$((${n2_cpu_quota%.*} - ${n2_cpu_usage%.*} - (shared_mgmt_eha_proxy_vcpus > need_mgmt_vcpus ? shared_mgmt_eha_proxy_vcpus : need_mgmt_vcpus) ))
 gap_pg_vcpus=$((${pg_cpu_quota%.*} - ${pg_cpu_usage%.*} - need_pg_vcpus))
-gap_ehaproxy_vcpus=$((${c2_cpu_quota%.*} - ${c2_cpu_usage%.*} - need_pg_eha_proxy_vcpus))
+gap_ehaproxy_vcpus=$((${n2_cpu_quota%.*} - ${n2_cpu_usage%.*} - (shared_mgmt_eha_proxy_vcpus > need_pg_eha_proxy_vcpus ? shared_mgmt_eha_proxy_vcpus : need_pg_eha_proxy_vcpus) ))
 gap_serverless_vcpus=$((${cpu_quota%.*} - ${cpu_usage%.*} - need_serverless_vcpus))
 gap_ip=$((${ip_quota%.*} - ${ip_usage%.*} - need_ip))
 gap_vpc=$((${vpc_quota%.*} - ${vpc_usage%.*} - need_vpc))
@@ -653,4 +647,3 @@ printf "$FMT" "Static IP Addresses" "${ip_quota_code}" ${ip_quota%.*} ${ip_usage
 printf "$FMT" "VPCs" "${vpc_quota_code}" ${vpc_quota%.*} ${vpc_usage} ${need_vpc} ${gap_vpc} "$(quota_suggest $gap_vpc "${vpc_quota_code}" "${vpc_quota%.*}")"
 printf "$FMT" "Cloud Routers" "${router_quota_code}" ${router_quota%.*} ${router_usage%.*} ${need_router} ${gap_router} "$(quota_suggest $gap_router "${router_quota_code}" "${router_quota%.*}")"
 echo ""
-echo "Note: the listed Instance Types are referring to the same CPU Regional Quota."

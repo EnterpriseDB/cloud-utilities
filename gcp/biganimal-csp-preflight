@@ -335,10 +335,10 @@ region=$2
 # check that the gcloud cli is configured to work with the given project and we have access to
 set +e
 current_project=$(gcloud config get-value project)
-[ $? -ne 0 ] && suggest "Error while checking GCP credentials/profile configuration, please init/configure your gcloud CLI session/profile" alert \
+[ $? -ne 0 ] && suggest "Error while checking GCP credentials/profile configuration, please init/configure your Google Cloud CLI session/profile" alert \
     && show_help && exit 1
 set -e
-[[ ! "${current_project}" = "$project" ]] && suggest "Error: gcloud CLI not configured to work with the requested project $project!" alert \
+[[ ! "${current_project}" = "$project" ]] && suggest "Error: Google Cloud CLI not configured to work with the requested project $project!" alert \
     && suggest "The configured project ID is ${current_project}!" alert && show_help && exit 1
 
 [ -z "$region" ] && show_help && exit 1
@@ -425,8 +425,8 @@ function _onexit {
   echo -e "$(cat "$TMP_SUGGESTION")"
 
   echo ""
-  echo "Please use the Quotas page in the Google Cloud console if need to raise any service quota limits."
-  echo "See https://cloud.google.com/docs/quota_detail/view_manage#requesting_higher_quota for more info."
+  echo "Use the Quotas page in the Google Cloud console if you need to raise any service quota limits."
+  echo "See https://cloud.google.com/docs/quota_detail/view_manage#requesting_higher_quota for more information."
 
   rm -rf "${TMPDIR}"
   [ -n "$ba_preflight" ] && exit 2
@@ -451,10 +451,10 @@ function check_gcloud_version {
   cliversionstripped=${fullcliversion%%$'\n'*}
   cliversion=${cliversionstripped##* }
   if [[ "$GOOGLE_CLOUD_SHELL" == "true" ]]; then
-    suggest "Run GCP Preflight Checks with gcloud cli ${cliversion} in GCP CloudShell" ok
+    suggest "Run GCP Preflight Checks with Google Cloud CLI ${cliversion} in GCP CloudShell" ok
   else
-    [ "$(version "$cliversion")" -lt "$(version "428.0.0")" ] && echo -e "${RED}Error: upgrade gcloud cli to 428.0.0 or later${NC}" && exit 1
-    suggest "Run GCP Preflight Checks with gcloud cli ${cliversion}" ok
+    [ "$(version "$cliversion")" -lt "$(version "428.0.0")" ] && echo -e "${RED}Error: upgrade Google Cloud CLI to 428.0.0 or later${NC}" && exit 1
+    suggest "Run GCP Preflight Checks with Google Cloud CLI ${cliversion}" ok
   fi
 }
 check_gcloud_version
@@ -464,13 +464,13 @@ function validate_project() {
   set +e
   current_project=$(gcloud config get-value project)
   if [ $? -ne 0 ]; then
-    echo -e "${RED}Error while checking GCP credentials/profile configuration, please init/configure your gcloud CLI session/profile${NC}"
+    echo -e "${RED}Error while checking GCP credentials/profile configuration, please init/configure your Google Cloud CLI session/profile${NC}"
     show_help
     exit 1
   fi
   set -e
   if [[ ! "${current_project}" == "$1" ]]; then
-    echo -e "${RED}Error: gcloud CLI not configured to work with the requested project $1!${NC}"
+    echo -e "${RED}Error: Google Cloud CLI not configured to work with the requested project $1!${NC}"
     echo -e "${RED}The configured project ID is ${current_project}!${NC}"
     show_help
     exit 1
@@ -490,7 +490,7 @@ function validate_role_assignment() {
   # but maybe this not make really sense because you need to have also IAM rights
   # to query for IAM itself like organizations.getIamPolicy that are not really
   # needed to be able to use execute the preflight or the setup-csp script
-  store_suggestion "Make sure the GCP account used ${GREEN}$1${NC} has rights to create custom roles, service accounts, keys and assign project grants"
+  store_suggestion "Make sure the GCP account ${GREEN}$1${NC} has rights to create custom roles, service accounts, keys and assign project grants"
 }
 
 function check_onboard() {
@@ -506,6 +506,7 @@ function check_onboard() {
 REQUIRED_APIS=(
   "autoscaling.googleapis.com"
   "cloudapis.googleapis.com"
+  "cloudresourcemanager.googleapis.com"
   "compute.googleapis.com"
   "container.googleapis.com"
   "iam.googleapis.com"

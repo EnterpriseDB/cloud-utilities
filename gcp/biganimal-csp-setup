@@ -273,7 +273,7 @@ save_result()
   echo -e "Created GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC}"
   echo -e "Created GCP service account key, ID is ${GREEN}${sa_key_id##*/}${NC}"
   # exporting JSON "ba-passport.json" that will be used by BigAnimal CLI
-  echo "{\"gcpProject\":\"${project}\", \"roleName\":\"biganimal_${suffix_role_name}\", \"serviceAccountName\":\"biganimal-${suffix_sa_name}\",\"serviceAccountKey\":\"${sa_key}\"}" > "$CURRENT_PATH"/ba-passport.json
+  echo "{\"gcpProject\":\"${project}\", \"roleName\":\"biganimal_${suffix_role_name}\", \"serviceAccountName\":\"biganimal-${suffix_sa_name}@${project}.iam.gserviceaccount.com\",\"serviceAccountKey\":\"${sa_key}\"}" > "$CURRENT_PATH"/ba-passport.json
 }
 
 check

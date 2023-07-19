@@ -246,18 +246,26 @@ create_service_account()
   # checking if the service account is having a key
   sa_key_exists=$(gcloud iam service-accounts keys list --project "$project" \
     --iam-account "${service_account_id}" --managed-by user --format json | jq '. | length')
-  if [ "$sa_key_exists" -eq 0 ]; then
-    # the service account is not having any key, going to create it
+  if [ "$sa_key_exists" -lt 2 ]; then
+    # the service account is either not having any key or having only one, going to create a new one
     echo -e "Creating a GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC} key within the GCP project ${GREEN}${project}${NC}..."
     gcloud iam service-accounts keys create "${CURRENT_PATH}"/biganimal_serviceaccount_key.json \
       --iam-account "${service_account_id}" --format json > "${TMPDIR}"/biganimal_createsakey_output.json
   else
-    # the service account is already having a key, nothing to do
-    echo -e "The GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC} already has a key within the GCP project ${GREEN}${project}${NC}!"
+    # the service account is already having 2 or more keys, deleting the oldest one and creating a new one
+    echo -e "The GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC} already has a few keys within the GCP project ${GREEN}${project}${NC}!"
+    echo -e "Deleting the oldest GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC} key within the GCP project ${GREEN}${project}${NC}..."
+    sa_oldest_key=$(gcloud iam service-accounts keys list --project "$project" \
+      --iam-account "${service_account_id}" --managed-by user --format json | jq -r 'sort_by(.validAfterTime) | .[0].name')
+    sa_oldest_key_id=${sa_oldest_key##*/}
+    gcloud iam service-accounts keys delete "$sa_oldest_key_id" --iam-account "${service_account_id}" --quiet > "${TMPDIR}"/biganimal_deletesakey_output.json
+    echo -e "Creating a GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC} key within the GCP project ${GREEN}${project}${NC}..."
+    gcloud iam service-accounts keys create "${CURRENT_PATH}"/biganimal_serviceaccount_key.json \
+      --iam-account "${service_account_id}" --format json > "${TMPDIR}"/biganimal_createsakey_output.json
   fi
-  # getting the service account key id
+  # getting the newest service account key id
   sa_key_id=$(gcloud iam service-accounts keys list --project "$project" \
-    --iam-account "${service_account_id}" --managed-by user --format json | jq -r '.[0].name')
+    --iam-account "${service_account_id}" --managed-by user --format json | jq -r 'sort_by(.validAfterTime) | reverse | .[0].name')
   # getting the escaped JSON string of the key to be saved later into "ba-passport.json"
   sa_key=$(base64 -w0 < "${CURRENT_PATH}"/biganimal_serviceaccount_key.json)
 }

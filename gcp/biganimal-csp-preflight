@@ -372,6 +372,18 @@ mgmt_router=1
 ehaproxy_vm_type="n2-standard-2"
 pg_eha_proxy_vm_vcpu=2
 
+function get_pg_cpu_quota_code()
+{
+  local family="$1"
+  # if the family is n1 or e2, returns CPUS
+  # else return the family in upper case and append _CPUS
+  if [[ "${family}" =~ ^(n1|e2)$ ]]; then
+    echo "CPUS"
+  else
+    echo "${family^^}_CPUS"
+  fi
+}
+
 function infra_vcpus()
 {
     [ "$activate" = "true" ] && echo $((mgmt_vm_vcpu*mgmt_vm_instances)) || echo 0
@@ -575,7 +587,7 @@ n2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --
 n2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${n2_cpu_quota_code}\") | .quotas.limit")
 
-pg_cpu_quota_code="${pg_vm_family^^}_CPUS"
+pg_cpu_quota_code=$(get_pg_cpu_quota_code "$pg_vm_family")
 pg_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${pg_cpu_quota_code}\") | .quotas.usage")
 pg_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \

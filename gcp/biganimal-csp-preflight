@@ -363,7 +363,7 @@ pg_vm_family=${instance_type_info[3]}
 
 # hardcode management workload used VM instance type info
 mgmt_vm_vcpu=2
-mgmt_vm_instances=3
+mgmt_vm_instances=4
 mgmt_vm_type="n2-standard-2"
 mgmt_public_ips=1
 mgmt_router=1

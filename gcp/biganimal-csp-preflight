@@ -372,6 +372,18 @@ mgmt_router=1
 ehaproxy_vm_type="n2-standard-2"
 pg_eha_proxy_vm_vcpu=2
 
+function get_pg_cpu_quota_code()
+{
+  local family="$1"
+  # if the family is n1 or e2, returns CPUS
+  # else return the family in upper case and append _CPUS
+  if [[ "${family}" =~ ^(n1|e2)$ ]]; then
+    echo "CPUS"
+  else
+    echo "${family^^}_CPUS"
+  fi
+}
+
 function infra_vcpus()
 {
     [ "$activate" = "true" ] && echo $((mgmt_vm_vcpu*mgmt_vm_instances)) || echo 0
@@ -575,7 +587,7 @@ n2_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --
 n2_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${n2_cpu_quota_code}\") | .quotas.limit")
 
-pg_cpu_quota_code="${pg_vm_family^^}_CPUS"
+pg_cpu_quota_code=$(get_pg_cpu_quota_code "$pg_vm_family")
 pg_cpu_usage=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
   --format json | jq -r ".[] | select(.quotas.metric == \"${pg_cpu_quota_code}\") | .quotas.usage")
 pg_cpu_quota=$(gcloud compute regions describe "$region" --project "$project" --flatten quotas \
@@ -604,6 +616,11 @@ need_mgmt_vcpus=$(infra_vcpus)
 need_pg_vcpus=$(need_pg_vcpus_for "$pg_vm_vcpu" "$architecture")
 need_pg_eha_proxy_vcpus=$(need_pg_eha_proxy_vcpus_for "$pg_eha_proxy_vm_vcpu" "$architecture")
 need_serverless_vcpus=2
+# if pg_cpu_quota_code is CPUS, then we append need_serverless_vcpus with
+# need_pg_vcpus
+if [ "$pg_cpu_quota_code" = "CPUS" ]; then
+    need_serverless_vcpus=$((need_serverless_vcpus + need_pg_vcpus))
+fi
 need_ip=$(need_public_ip)
 need_router=$(need_router)
 need_vpc=$(need_vpc)
@@ -641,6 +658,8 @@ printf "$FMT" "Resource" "Quota Name" "Limit" "Used" "Required" "Gap" "Suggestio
 printf "$FMT" "--------" "----------" "----" "-----" "--------" "---" "----------"
 [ "$shared_mgmt_eha_proxy_vcpus" -gt 0 ] && need_mgmt_vcpus=$((need_mgmt_vcpus + need_pg_eha_proxy_vcpus))
 printf "$FMT" "$mgmt_vm_type vCPUs" "${n2_cpu_quota_code}" ${n2_cpu_quota%.*} ${n2_cpu_usage%.*} ${need_mgmt_vcpus} ${gap_mgmt_vcpus} "$(quota_suggest $gap_mgmt_vcpus "${n2_cpu_quota_code}" "${n2_cpu_quota%.*}")"
+# print the following line only when the pg_cpu_quota_code is not CPUS
+[ "$pg_cpu_quota_code" != "CPUS" ] && \
 printf "$FMT" "$pg_vm_type vCPUs" "${pg_cpu_quota_code}" ${pg_cpu_quota%.*} ${pg_cpu_usage%.*} ${need_pg_vcpus} ${gap_pg_vcpus} "$(quota_suggest $gap_pg_vcpus "${pg_cpu_quota_code}" "${pg_cpu_quota%.*}")"
 [ "$shared_mgmt_eha_proxy_vcpus" -eq 0 ] && [ "$need_pg_eha_proxy_vcpus" -gt 0 ] && \
 printf "$FMT" "$ehaproxy_vm_type vCPUs" "${c2_cpu_quota_code}" ${c2_cpu_quota%.*} ${c2_cpu_usage%.*} ${need_pg_eha_proxy_vcpus} ${gap_ehaproxy_vcpus} "$(quota_suggest $gap_ehaproxy_vcpus "${c2_cpu_quota_code}" "${c2_cpu_quota%.*}")"

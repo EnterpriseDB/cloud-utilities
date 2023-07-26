@@ -64,7 +64,6 @@
       "Effect": "Allow",
       "Resource": [
         "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
-        "arn:aws:iam::*:role/biganimal-role-*",
         "arn:aws:iam::*:policy/biganimal-policy-*",
         "arn:aws:iam::*:policy/*##EXTERNAL_ID##*",
         "arn:aws:iam::*:policy/AmazonEKS*"

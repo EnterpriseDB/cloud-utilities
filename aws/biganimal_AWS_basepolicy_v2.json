@@ -109,7 +109,7 @@
         "dynamodb:UntagResource"
       ],
       "Effect": "Allow",
-      "Resource": "arn:aws:dynamodb:us-east-1:*:table/tf-state-dynamodb-table*"
+      "Resource": "arn:aws:dynamodb:*:*:table/tf-state-dynamodb-table*"
     },
     {
       "Effect": "Allow",

@@ -527,6 +527,11 @@ vpc_quota_code=( "L-F678F1CE" "VPCs per Region" )
 vpc_quota=$(aws service-quotas get-service-quota --region "$region" --service-code vpc --quota-code "${vpc_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
 nlb_quota_code=( "L-69A177A2" "Network Load Balancers per Region" )
 nlb_quota=$(aws service-quotas get-service-quota --region "$region" --service-code elasticloadbalancing --quota-code "${nlb_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+sgrules_quota_code=( "L-0EA8095F" "Inbound or outbound rules per security group" )
+sgrules_quota=$(aws service-quotas get-service-quota --region "$region" --service-code vpc --quota-code "${sgrules_quota_code[0]}" --query 'Quota.Value' --no-cli-pager)
+
+# on eha we suggest to increase the VPC limit "Inbound or outbound rules per security group" to at least 200
+[ "$architecture" = "eha" ] && [ "${sgrules_quota%.*}" -lt "200" ] && store_suggestion "Highly recommended for EHA: '${GREEN}${sgrules_quota_code[1]}${NC}' quota in '${GREEN}$region${NC}' needs to be increased to '${RED}200${NC}'"
 
 # calculate required resources
 need_mgmt_vcpus=$(infra_vcpus)

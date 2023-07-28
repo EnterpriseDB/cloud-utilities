@@ -464,7 +464,7 @@ function validate_subscription() {
 #### Azure User Role Assignment Checking
 function validate_role_assignment() {
   user_name=$(echo "$1" | jq -r .userPrincipalName)
-  count=$(az role assignment list --assignee "${user_name//\#/%23}" --include-groups --include-inherited --role Owner -o json --only-show-errors | jq length)
+  count=$(az role assignment list --assignee "${user_name//\#/%23}" --include-groups --include-inherited --role Owner -o json --only-show-errors 2> /dev/null || echo "{}" | jq length)
   if [ "$count" = "0" ]; then
     store_suggestion "Current user is $user_name. If you are going to do signup, you should have Owner role of the subscription $subscription"
   fi

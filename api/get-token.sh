@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright 2021,2022 EnterpriseDB Corporation
+# Copyright 2021,2023 EnterpriseDB Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,10 +33,12 @@ function show_help()
 {
     echo "Get Tokens for BigAnimal API"
     echo ""
+    echo "WARNING: to get access token for user login to the invited organization, please download BigAnimal CLI"
+    echo "         from https://cli.biganimal.com/ and create credential for the alternative organization."
+    echo ""
     echo "Usage:"
     echo "  $0 [flags] [options]"
     echo ""
-    echo "      -ft, --freetrial                   [optional] login with BigAnimal free trial account"
     echo "      -o,  --format  json | plain        [optional] output format, default 'json'"
     echo "      -r,  --refresh <refresh_token>     [optional] query for tokens again by the given refresh_token"
     echo "                                           this revokes and rotates the given refresh token, "
@@ -62,17 +64,12 @@ function check()
 }
 
 format="json"
-freetrial=false
 # argument handling
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   key="$1"
 
   case $key in
-    -ft|--freetrial)
-      freetrial=true
-      shift 1
-      ;;
     -o|--format)
       format="$2"
       shift 2
@@ -100,17 +97,12 @@ curl -s ${BASE_URL}/api/v3/auth/provider > provider_resp || cat provider_resp ||
 # response sample
 # {
 #   "clientId": "pM8PRguGtW9yVnrsvrvpaPyyeS9fVvFh",
-#   "freetrialClientId": "m71bEVZrGsWiKtPqMI3hYCHCG3EYLPDk",
 #   "issuerUri": "https://auth.biganimal.com",
 #   "scope": "openid profile email offline_access",
 #   "audience": "https://portal.biganimal.com/api"
 # }
 
-if [ "$freetrial" = 'true' ]; then
-  CLIENT_ID=$(< provider_resp jq -r .freetrialClientId)
-else
-  CLIENT_ID=$(< provider_resp jq -r .clientId)
-fi
+CLIENT_ID=$(< provider_resp jq -r .clientId)
 AUTH_SERVER=$(< provider_resp jq -r .issuerUri)
 SCOPE=$(< provider_resp jq -r .scope)
 AUDIENCE=$(< provider_resp jq -r .audience)

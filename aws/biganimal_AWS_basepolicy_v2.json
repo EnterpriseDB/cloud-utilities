@@ -74,7 +74,12 @@
         "s3:ListAllMyBuckets",
         "servicequotas:ListAWSDefaultServiceQuotas",
         "servicequotas:ListServiceQuotas",
-        "sts:DecodeAuthorizationMessage"
+        "sts:DecodeAuthorizationMessage",
+        "ec2:AssociateVpcCidrBlock",
+        "ec2:CreateLaunchTemplate",
+        "ec2:CreateLaunchTemplateVersion",
+        "ec2:RunInstances",
+        "ec2:DeleteNetworkInterface"
       ],
       "Effect": "Allow",
       "Resource": "*"

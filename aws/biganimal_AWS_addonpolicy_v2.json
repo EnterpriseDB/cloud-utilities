@@ -116,7 +116,8 @@
         "iam:DeleteOpenIDConnectProvider",
         "iam:GetOpenIDConnectProvider",
         "iam:TagOpenIDConnectProvider",
-        "iam:UntagOpenIDConnectProvider"
+        "iam:UntagOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
       ],
       "Effect": "Allow",
       "Resource": "arn:aws:iam::*:oidc-provider/oidc.eks.*.amazonaws.com*",
@@ -171,7 +172,10 @@
         "logs:PutMetricFilter",
         "logs:PutRetentionPolicy",
         "logs:TagLogGroup",
-        "logs:UntagLogGroup"
+        "logs:UntagLogGroup",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:ListTagsForResource"
       ],
       "Effect": "Allow",
       "Resource": [

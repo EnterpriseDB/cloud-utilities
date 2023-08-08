@@ -64,7 +64,8 @@
       "Effect": "Allow",
       "Resource": [
         "arn:aws:iam::*:role/ba-##EXTERNAL_ID##-*",
-        "arn:aws:iam::*:policy/biganimal-policy-*",
+        "arn:aws:iam::*:role/biganimal-*",
+        "arn:aws:iam::*:policy/biganimal-*",
         "arn:aws:iam::*:policy/*##EXTERNAL_ID##*",
         "arn:aws:iam::*:policy/AmazonEKS*"
       ]
@@ -181,24 +182,6 @@
       "Resource": [
         "arn:aws:logs:*:*:log-group:/biganimal/*",
         "arn:aws:logs:*:*:log-group:/biganimal/*:log-stream:*"
-      ]
-    },
-    {
-      "Sid": "FullLaunchTemplatePermissions",
-      "Effect": "Allow",
-      "Action": [
-          "ec2:RunInstances",
-          "ec2:CreateLaunchTemplate",
-          "ec2:CreateLaunchTemplateVersion",
-          "ec2:GetLaunchTemplateData",
-          "ec2:DescribeLaunchTemplateVersions",
-          "ec2:DescribeLaunchTemplates",
-          "ec2:DeleteLaunchTemplate",
-          "ec2:DisassociateAddress",
-          "ec2:AssociateVpcCidrBlock"
-      ],
-      "Resource": [
-          "*"
       ]
     },
     {

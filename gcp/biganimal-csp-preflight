@@ -163,7 +163,6 @@ AVAILABLE_INSTANCETYPE=(
   n2-highmem-80
   n2-highmem-96
   n2-highmem-128
-  n2-highcpu-2
   n2-highcpu-4
   n2-highcpu-8
   n2-highcpu-16
@@ -191,7 +190,6 @@ AVAILABLE_INSTANCETYPE=(
   n2d-highmem-64
   n2d-highmem-80
   n2d-highmem-96
-  n2d-highcpu-2
   n2d-highcpu-4
   n2d-highcpu-8
   n2d-highcpu-16

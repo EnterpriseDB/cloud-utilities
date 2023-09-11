@@ -337,6 +337,8 @@ includedPermissions:
 - container.replicaSets.update
 - container.replicaSets.updateScale
 - container.replicaSets.updateStatus
+- container.resourceQuotas.get
+- container.resourceQuotas.create
 - container.roleBindings.create
 - container.roleBindings.delete
 - container.roleBindings.get

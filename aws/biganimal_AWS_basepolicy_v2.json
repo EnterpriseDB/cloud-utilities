@@ -106,6 +106,7 @@
       "Action": [
         "dynamodb:CreateTable",
         "dynamodb:DeleteItem",
+        "dynamodb:DeleteTable",
         "dynamodb:DescribeContinuousBackups",
         "dynamodb:DescribeTable",
         "dynamodb:GetItem",

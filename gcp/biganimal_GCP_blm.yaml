@@ -1,0 +1,20 @@
+title: "BigAnimal Role for Backup Lifecycle Manager"
+description: "Custom IAM Role used by BigAnimal Backup Lifecycle Manager"
+stage: "GA"
+includedPermissions:
+- storage.buckets.createTagBinding
+- storage.buckets.deleteTagBinding
+- storage.buckets.get
+- storage.buckets.getIamPolicy
+- storage.buckets.getObjectInsights
+- storage.buckets.list
+- storage.buckets.listEffectiveTags
+- storage.buckets.listTagBindings
+- storage.buckets.setIamPolicy
+- storage.buckets.update
+- storage.objects.delete
+- storage.objects.get
+- storage.objects.getIamPolicy
+- storage.objects.list
+- storage.objects.setIamPolicy
+- storage.objects.update

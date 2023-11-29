@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# Infra predefined role names
+role_names=("compute.viewer" "container.clusterAdmin" "edgecontainer.admin" "iam.serviceAccountUser" "compute.networkAdmin")
+
+# Initialize an empty array to store the permissions
+permissions=()
+
+# Loop through the role names and get their permissions
+for role_name in "${role_names[@]}"
+do
+  # Construct the full role name
+  full_role_name="roles/${role_name}"
+  # Get the role permissions using the gcloud command
+  role_permissions=$(gcloud iam roles describe "${full_role_name}" --format="value(includedPermissions)")
+  # Replace the semicolons with newlines
+  role_permissions=$(echo "${role_permissions}" | tr ';' '\n')
+  # Append the permissions to the array
+  permissions+=(${role_permissions})
+done
+
+# Sort the permissions and remove the duplicates
+permissions=($(printf "%s\n" "${permissions[@]}" | sort -u))
+
+# Remove the invalid permissions from the array
+invalid_permissions=("resourcemanager.projects.list" "compute.organizations.listAssociations" "networksecurity.firewallEndpoints.update" "networksecurity.firewallEndpoints.delete" "networksecurity.firewallEndpoints.create" "networksecurity.firewallEndpoints.list" "networksecurity.firewallEndpoints.get" "networksecurity.firewallEndpoints.use")
+result=($(printf "%s\n" "${permissions[@]}" "${invalid_permissions[@]}" | sort | uniq -u))
+#result=($(comm -3 <(printf "%s\n" "${permissions[@]}" | sort) <(printf "%s\n" "${invalid_permissions[@]}" | sort)))
+
+# Create the GCP custom role YAML file
+cat <<EOF > biganimal_GCP_infra.yaml
+title: "BigAnimal Role for Infra Operator"
+description: "Custom IAM Role used by BigAnimal Infra Operator"
+stage: "GA"
+includedPermissions:
+EOF
+printf -- "- %s\n" "${result[@]}" >> biganimal_GCP_infra.yaml

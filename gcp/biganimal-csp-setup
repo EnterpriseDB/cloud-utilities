@@ -16,18 +16,18 @@
 
 # This script is used to create a GCP custom role and a service account with
 # enough permissions in your GCP project for handling the BigAnimal managed
-# service, and returing its credentials in a "ba-passport.json".
+# service, and returning its credentials in a "ba-passport.json".
 #
 # What it does:
 #   - assume you have an gcloud profile configured to work with the gcloud CLI
 #   - configured your gcloud profile to work with the selected project
-#   - create an GCP custom role following the PoLP (Principle of Least Privilege)
+#   - create a few GCP custom roles following the PoLP (Principle of Least Privilege)
 #   - create an GCP service account attaching the previously created custom role
 #   - create an GCP service account key for the previously created service account
 #   - write the service account credentials into a local file named "ba-passport.json"
 #
 # it finally outputs the:
-#   - GCP custom role ID
+#   - GCP custom roles IDs
 #   - GCP service account ID
 #   - GCP project ID where those resources have been created
 # The "ba-passport.json" file content will be used later on with the BigAnimal CLI
@@ -81,6 +81,7 @@ show_help()
   echo "    $0 -p my-sample-project-191923"
   echo "    $0 -p my-sample-project-191923 -s \"my-sa-suffix\" -r \"my_role_suffix\""
   echo "    this will create one service account named 'biganimal-my-sa-suffix' and a custom role named 'biganimal_my_role_suffix'"
+  echo "    plus multiple custom roles for BigAnimal services all having the biganimal prefix"
   echo ""
   echo -e "${GREEN}Note: GCP service account names can't contain underscores (_) while custom role names can't contains dashes (-)${NC}"
   echo ""
@@ -179,14 +180,29 @@ done
 
 download_dependencies()
 {
-  # a shell func to download all the dependecies of this script before starting to execute
-  # Download the latest biganimal role template or overwrite it
-  template_file=biganimal_GCP_baserole.yaml
-  curl https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/gcp/${template_file} -o "${CURRENT_PATH}"/${template_file}
-  if [[ -s "${CURRENT_PATH}/${template_file}" ]]; then
-    echo "Downloaded ${CURRENT_PATH}/${template_file}"
+  # a shell func to download all the dependencies of this script before starting to execute
+  # Download the latest biganimal roles templates or overwrite it
+  TEMPLATE_FILES=(
+    biganimal_GCP_baserole.yaml
+    biganimal_GCP_npo.yaml
+    biganimal_GCP_infra.yaml
+    biganimal_GCP_telemetry.yaml
+    biganimal_GCP_kubecost.yaml
+    biganimal_GCP_blm.yaml
+    biganimal_GCP_cspmetrics.yaml
+  )
+  for template_file in "${TEMPLATE_FILES[@]}"; do
+    download_template_file "${template_file}"
+  done
+}
+
+download_template_file()
+{
+  curl -s https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/upm-23618/gcp/"${1}" -o "${CURRENT_PATH}"/"${1}"
+  if [[ -s "${CURRENT_PATH}/${1}" ]]; then
+    echo "Downloaded ${CURRENT_PATH}/${1}"
   else
-    echo "Error: failed to download ${CURRENT_PATH}/${template_file}"
+    echo "Error: failed to download ${CURRENT_PATH}/${1}"
     exit 1
   fi
 }
@@ -205,17 +221,53 @@ create_iam_custom_role()
       --filter "name:biganimal_${suffix_role_name}" --format json | jq -r '.[].name')
 
     gcloud iam roles update "${custom_role_id##*/}" --project "$project" \
-      --file "${CURRENT_PATH}/${template_file}" --quiet \
-      --format json > "${TMPDIR}"/biganimal_updatecustomrole_output.json
+      --file "${CURRENT_PATH}/biganimal_GCP_baserole.yaml" --quiet \
+      --format json > "${TMPDIR}/biganimal_role_${suffix_role_name}_update_output.json"
   else
     # creating the GCP custom role
     echo -e "Creating GCP custom role ${GREEN}biganimal_${suffix_role_name}${NC} within GCP project ${GREEN}${project}${NC}..."
     gcloud iam roles create "biganimal_${suffix_role_name}" --project "$project" \
-      --file "${CURRENT_PATH}/${template_file}" --quiet \
-      --format json > "${TMPDIR}"/biganimal_createcustomrole_output.json
+      --file "${CURRENT_PATH}/biganimal_GCP_baserole.yaml" --quiet \
+      --format json > "${TMPDIR}/biganimal_role_${suffix_role_name}_create_output.json"
     custom_role_id=$(gcloud iam roles list --project "$project" \
       --filter "name:biganimal_${suffix_role_name}" --format json | jq -r '.[].name')
   fi
+}
+
+OPERATORS_CUSTOM_ROLE=(
+  npo
+  infra
+  telemetry
+  kubecost
+  blm
+  cspmetrics
+)
+
+create_operators_iam_custom_role()
+{
+  for role in "${OPERATORS_CUSTOM_ROLE[@]}"; do
+    # verify if a custom role with the same name is already existing
+    role_exists=$(gcloud iam roles list --project "$project" \
+      --filter "name:biganimal_${role}" --format json | jq '. | length')
+    if [ "$role_exists" -gt 0 ]; then
+      # a custom role with the same name already exists
+      echo -e "Updating GCP ${GREEN}biganimal_${role}${NC} custom role within GCP project ${GREEN}${project}${NC}..."
+
+      # updating the operator GCP custom role
+      operator_custom_role_id=$(gcloud iam roles list --project "$project" \
+        --filter "name:biganimal_${role}" --format json | jq -r '.[].name')
+
+      gcloud iam roles update "${operator_custom_role_id##*/}" --project "$project" \
+        --file "${CURRENT_PATH}/biganimal_GCP_${role}.yaml" --quiet \
+        --format json > "${TMPDIR}/biganimal_GCP_${role}_update_output.json"
+    else
+      # creating the operator GCP custom role
+      echo -e "Creating GCP ${GREEN}biganimal_${role}${NC} custom role within GCP project ${GREEN}${project}${NC}..."
+      gcloud iam roles create "biganimal_${role}" --project "$project" \
+        --file "${CURRENT_PATH}/biganimal_GCP_${role}.yaml" --quiet \
+        --format json > "${TMPDIR}/biganimal_GCP_${role}_create_output.json"
+    fi
+  done
 }
 
 create_service_account()
@@ -278,6 +330,9 @@ save_result()
   echo "######################################################"
   echo ""
   echo -e "Created GCP custom role ${GREEN}biganimal_${suffix_role_name}${NC}"
+  for role in "${OPERATORS_CUSTOM_ROLE[@]}"; do
+    echo -e "Created GCP custom role ${GREEN}biganimal_${role}${NC}"
+  done
   echo -e "Created GCP service account ${GREEN}biganimal-${suffix_sa_name}${NC}"
   echo -e "Created GCP service account key, ID is ${GREEN}${sa_key_id##*/}${NC}"
   # exporting JSON "ba-passport.json" that will be used by BigAnimal CLI
@@ -287,5 +342,6 @@ save_result()
 check
 download_dependencies
 create_iam_custom_role
+create_operators_iam_custom_role
 create_service_account
 save_result

@@ -1,0 +1,22 @@
+title: "BigAnimal Role for NodePool Operator"
+description: "Custom IAM Role used by BigAnimal NodePool Operator"
+stage: "GA"
+includedPermissions:
+- compute.instanceGroupManagers.get
+- compute.instanceGroupManagers.list
+- compute.zones.list
+- compute.machineTypes.get
+- compute.machineTypes.list
+- container.clusters.get
+- container.clusters.update
+- container.operations.get
+- edgecontainer.nodePools.create
+- edgecontainer.nodePools.delete
+- edgecontainer.nodePools.get
+- edgecontainer.nodePools.list
+- edgecontainer.nodePools.update
+- iam.serviceAccounts.actAs
+- iam.serviceAccounts.get
+- iam.serviceAccounts.getAccessToken
+- iam.serviceAccounts.list
+- resourcemanager.projects.get

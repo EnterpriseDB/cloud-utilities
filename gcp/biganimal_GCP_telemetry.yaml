@@ -1,0 +1,16 @@
+title: "BigAnimal Role for Telemetry"
+description: "Custom IAM Role used by BigAnimal Telemetry"
+stage: "GA"
+includedPermissions:
+- orgpolicy.policy.get
+- resourcemanager.projects.get
+- storage.managedFolders.create
+- storage.managedFolders.get
+- storage.managedFolders.list
+- storage.multipartUploads.abort
+- storage.multipartUploads.create
+- storage.multipartUploads.listParts
+- storage.objects.create
+- storage.objects.delete
+- storage.objects.get
+- storage.objects.list

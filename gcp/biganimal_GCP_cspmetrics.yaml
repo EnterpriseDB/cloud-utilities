@@ -1,0 +1,11 @@
+title: "BigAnimal Role for CSP Metrics"
+description: "Custom IAM Role used by BigAnimal CSP Metrics"
+stage: "GA"
+includedPermissions:
+- compute.disks.list
+- compute.instanceGroups.get
+- compute.projects.get
+- compute.regions.get
+- compute.regions.list
+- compute.zones.list
+- container.clusters.get

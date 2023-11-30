@@ -198,7 +198,7 @@ download_dependencies()
 
 download_template_file()
 {
-  curl -s https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/upm-23618/gcp/"${1}" -o "${CURRENT_PATH}"/"${1}"
+  curl -s https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/gcp/"${1}" -o "${CURRENT_PATH}"/"${1}"
   if [[ -s "${CURRENT_PATH}/${1}" ]]; then
     echo "Downloaded ${CURRENT_PATH}/${1}"
   else

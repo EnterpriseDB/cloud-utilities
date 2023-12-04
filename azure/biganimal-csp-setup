@@ -204,7 +204,7 @@ check_id()
 
 download_dependencies()
 {
-  # a shell func to download all the dependecies of this script before starting to execute
+  # a shell func to download all the dependencies of this script before starting to execute
   # Download the latest biganimal role template or overwrite it
   template_file=biganimal-poweruser-template.json
   curl https://raw.githubusercontent.com/EnterpriseDB/cloud-utilities/main/azure/${template_file} -o "${CURRENT_PATH}"/${template_file}
@@ -499,5 +499,5 @@ create_or_update_custom_role
 check_custom_role
 create_ad_sp
 add_spn_owners
-print_and_save_result
 grant_api_permissions
+print_and_save_result

@@ -94,17 +94,17 @@ check()
   #### Check gcloud auth
   gcloud_auth_list=$(gcloud auth list --format json | jq -r '.[] | select(.status=="ACTIVE").account | length')
   if [ "$gcloud_auth_list" -eq 0 ]; then
+    show_help
     echo -e "${RED}Error: no GCP account ACTIVE in gcloud CLI${NC}"
     echo -e "${RED}Please run 'gcloud auth login' to login to your GCP account${NC}"
-    show_help
     exit 1
   fi
   #### Check gcloud account set
   gcloud_account_set=$(gcloud config configurations list --format json | jq -r '.[] | select(.is_active==true).properties.core.account | length')
   if [ "$gcloud_account_set" -eq 0 ]; then
+    show_help
     echo -e "${RED}Error: no GCP account set in gcloud CLI${NC}"
     echo -e "${RED}Please run 'gcloud config set account YOUR_GCP_EMAIL_ACCOUNT' to set the GCP account${NC}"
-    show_help
     exit 1
   fi
   # jq is required.

@@ -106,9 +106,12 @@
       "Action": [
         "dynamodb:CreateTable",
         "dynamodb:DeleteItem",
+        "dynamodb:DeleteTable",
         "dynamodb:DescribeContinuousBackups",
         "dynamodb:DescribeTable",
         "dynamodb:GetItem",
+        "dynamodb:ListTables",
+        "dynamodb:ListTagsOfResource",
         "dynamodb:PutItem",
         "dynamodb:TagResource",
         "dynamodb:UntagResource"

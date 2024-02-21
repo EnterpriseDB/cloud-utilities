@@ -118,7 +118,7 @@ echo "Dump all policies and initiatives of current context subscription..."
 # Get "policyDefinitionId" field of each assignment from the assignment list string of type json
 declare -a policy_definition_id_list_array
 policy_definition_id_list=$(jq -r '.[].policyDefinitionId' <<< "${assignment_list}")
-read -r -a policy_definition_id_list_array <<< ${policy_definition_id_list}
+read -r -a policy_definition_id_list_array <<< "${policy_definition_id_list}"
 
 declare -a policy_list
 declare -a initiative_list

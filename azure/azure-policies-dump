@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+
+#
+# Copyright 2023 EnterpriseDB Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This script is used to export all the effective Azure policy assignments
+# for an Azure subscription, including the assignments inherited from its
+# superior management groups. The script will export these assignments to
+# a JSON file which can be used for analysis later.
+
+# This script is used to create a SPN(Service Principal Name) with enough
+# permissions in your Azure subscription for handling the BigAnimal managed
+# service, or update SPN with MS Graph API permissions.
+#
+# What it does:
+#   - assume you have already login to your Azure AD(Active Directory) directory by Azure CLI
+#   - set your Azure CLI context to the given subscription
+#   - record minimal account information of the subscription for our follow-up analysis
+#   - record all the effective Azure policy assignments for the given subscription
+#   including those from its superior management groups
+#   - record ONLY those assigned custom initiative definitions and policy definitions
+#   - generate a file named "azure-policies.output" containing all above information
+
+# Exit on any error
+set -e
+
+# Global definitions
+#
+#   SUBSCRIPTIONID: the subscription id to export the policy assignments.
+#   OUTPUTDIR: the directory to store the exported policy assignments.
+#   DEBUGMODE: whether to enable debug mode, which will print more debug info.
+
+USAGE="Usage: azure-policies-dump --subscription [SUBSCRIPTION_ID] --output-dir [OUTPUT_DIR]"
+OUTPUTDIR="."
+SUBSCRIPTIONID=""
+
+#   Printer helper functions
+function error() {
+  echo -e "\033[0;31mError: $1\033[0m"
+  exit 1
+}
+function suggest() {
+  echo -e "\033[0;32m$1\033[0m"
+}
+function dump() {
+  echo "${@}" >>"${OUTPUTDIR}"/azure-policies.output
+}
+
+# Do runtime envrionment preflight check
+# and command line arguments check.
+
+# jq is required to run this script
+command -v jq >/dev/null 2>&1 || error "please install jq on the system"
+
+# Parse input command line arguments
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --subscription)
+    SUBSCRIPTIONID="$2"
+    shift 2
+    ;;
+  --output-dir)
+    OUTPUTDIR="$2"
+    shift 2
+    ;;
+  *)
+    echo -e "${USAGE}"
+    exit 1
+    ;;
+  esac
+done
+
+# Check the subscription id, see if it is provided and a valid one.
+if [[ ! "${SUBSCRIPTIONID}" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]; then
+  echo "${USAGE}"
+  error "invalid subscription id: ${SUBSCRIPTIONID}"
+fi
+
+# Start the main process
+#
+# Note: azure exemptions on the subscription level are not supported yet in this
+# version, since it's less likely to use exemptions on the subscription the
+# customer give us, and using them on the management group is rare, so we can
+# ignore them for now
+
+# Change the Azure CLI context to the specified subscription
+echo "Change your Azure CLI context to the subscription: ${SUBSCRIPTIONID}"
+az account set --subscription "${SUBSCRIPTIONID}"
+echo "## Azure CLI context" >"${OUTPUTDIR}"/azure-policies.output
+dump "$(az account show -o json)"
+
+
+# Export all the effective assignments for the current context subscription,
+# including the assignments inherited from those superior management groups,
+# which will be exported to a JSON file. This file can also be used to restore
+# the assignments later.
+echo "Dump all the effective policy assignments for the current context subscription..."
+assignment_list=$(az policy assignment list --disable-scope-strict-match -o json)
+dump
+dump "## Assignment list"
+dump "${assignment_list}"
+
+
+echo "Dump all policies and initiatives of current context subscription..."
+# Get "policyDefinitionId" field of each assignment from the assignment list string of type json
+declare -a policy_definition_id_list_array
+policy_definition_id_list=$(jq -r '.[].policyDefinitionId' <<< ${assignment_list})
+read -r -a policy_definition_id_list_array <<< ${policy_definition_id_list}
+
+declare -a policy_list
+declare -a initiative_list
+# Iterate over every policyDefinitionId in the policy_initiative_definition_id_list, 
+# generate the a policy list and a initiative list respectively.
+for policy_definition_id in "${policy_definition_id_list_array[@]}"; do
+  if [[ "${policy_definition_id}" =~ policyDefinitions ]]; then
+    policy_list+=("${policy_definition_id}")
+  elif [[ "${policy_definition_id}" =~ policySetDefinitions ]]; then
+    initiative_list+=("${policy_definition_id}")
+  fi
+done
+
+dump
+dump "## Policy list"
+dump "$(printf "%s\n" "${policy_list[@]}" | sort -u)"
+dump
+dump "## Initiative list"
+dump "$(printf "%s\n" "${initiative_list[@]}" | sort -u)"
+
+# Some initiatives may be assigned multiple times with different parameters, we only need to
+# export the initiative once, the parameters can be exported separately in assignments.
+IFS=$'\n' read -r -d '' -a initiative_list < <(
+  IFS=$'\n'
+  echo "${initiative_list[*]}" | sort -u
+  printf '\0'
+)
+
+# This function is used to deal with initiatives, the function is similar to the function get_policies,
+# the most significant difference is that the function get_policies is used to get policies, and this 
+# function is used to get initiatives, this function also use the output of the function 
+# analyse_policy_definition_id function to get the initiative defined scope, initiative defined scope 
+# name, and initiative name, and use those three arrays to get the initiative json list from azure,
+# some filtering will be done too, only keep the initiatives with policyType "Custom", those initiatives 
+# with policyType "BuiltIn" will be ignored.
+function get_custom_initiative_policies() {
+  dump
+  dump "## Custom initiative list"
+  for initiative in "${initiative_list[@]}"; do
+    # if the initiative is not builtin, then ignore it.
+    if [[ ! "${initiative}" =~ ^\/providers\/Microsoft.Authorization ]]; then
+      # if it is defined on management group then dump
+      if [[ "${initiative}" =~ ^\/providers\/Microsoft.Management ]]; then
+        # if it is defined on management group then dump
+        local management_group_id
+        local initiative_id
+        local policy
+        IFS='/' read -r _ _ _ _ management_group_id _ _ _ initiative_id <<<"${initiative}"
+        policy="$(az policy set-definition show --management-group "${management_group_id}" --name "${initiative_id}" -o json)"
+        # dump the initiative body and print the policies of the initiative
+        dump "${policy}"
+        jq -r '.policyDefinitions[].policyDefinitionId' <<<"${policy}"
+      fi
+      # if it is defined on subscription then dump
+      if [[ "${initiative}" =~ ^\/subscriptions ]]; then
+        local subscription_id
+        local initiative_id
+        local policy
+        IFS='/' read -r _ _ subscription_id _ _ _ initiative_id <<<"${initiative}"
+        policy="$(az policy set-definition show --subscription "${subscription_id}" --name "${initiative_id}" -o json)"
+        dump "${policy}"
+        # dump the initiative body and print the policies of the initiative
+        jq -r '.policyDefinitions[].policyDefinitionId' <<<"${policy}"
+      fi
+    fi
+  done
+  printf '\0'
+}
+
+
+echo "Dump all the custom initiative definitions for the current context subscription..."
+declare -a custom_initiative_policy_array
+IFS=$'\n' read -r -d '' -a custom_initiative_policy_array < <(get_custom_initiative_policies)
+
+# merge the policy_list and custom_initiative_policy_array
+policy_list+=("${custom_initiative_policy_array[@]}")
+
+# Remove the duplication in policy_list
+IFS=$'\n' read -r -d '' -a policy_list < <(
+  IFS=$'\n'
+  echo "${policy_list[*]}" | sort -u
+  printf '\0'
+)
+
+
+# Filter custom policies and export their definition
+echo "Dump all the custom policy definitions for the current context subscription..."
+dump
+dump "## Custom policy list"
+
+for policy in "${policy_list[@]}"; do
+  # if the policy is not builtin, then ignore it.
+  if [[ ! "${policy}" =~ ^\/providers\/Microsoft.Authorization ]]; then
+    # if it is defined on management group then dump
+    if [[ "${policy}" =~ ^\/providers\/Microsoft.Management ]]; then
+      IFS='/' read -r _ _ _ _ management_group_id _ _ _ policy_id <<<"${policy}"
+      dump "$(az policy definition show --management-group "${management_group_id}" --name "${policy_id}" -o json)"
+    fi
+    # if it is defined on subscription then dump
+    if [[ "${policy}" =~ ^\/subscriptions ]]; then
+      IFS='/' read -r _ _ subscription_id _ _ _ policy_id <<<"${policy}"
+      dump "$(az policy definition show --subscription "${subscription_id}" --name "${policy_id}" -o json)"
+    fi
+  fi
+done

@@ -58,7 +58,7 @@ function dump() {
   echo "${@}" >>"${OUTPUTDIR}"/azure-policies.output
 }
 
-# Do runtime envrionment preflight check
+# Do runtime environment preflight check
 # and command line arguments check.
 
 # jq is required to run this script

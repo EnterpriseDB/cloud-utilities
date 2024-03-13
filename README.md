@@ -60,6 +60,7 @@ IAM Trust Policy applied to the created IAM role here:
 
 ## BigAnimal API Scripts
 
+!!! Deprecated, please use [BigAnimal Access Key][9] instead.
 [get-token.sh](./api/get-token.sh) is a script to obtain a token for accessing the [BigAnimal API][2].
 
 For more details about BigAnimal API, please refer to [Using the BigAnimal API][5]
@@ -72,3 +73,4 @@ For more details about BigAnimal API, please refer to [Using the BigAnimal API][
 [6]: https://aws.amazon.com/cli/
 [7]: https://www.enterprisedb.com/docs/biganimal/latest/reference/cli/
 [8]: https://formulae.brew.sh/formula/bash
+[9]: https://www.enterprisedb.com/docs/biganimal/latest/reference/access_key"

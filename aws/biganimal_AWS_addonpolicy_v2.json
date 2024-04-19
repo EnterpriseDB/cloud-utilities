@@ -87,6 +87,7 @@
         "ecs:DescribeClusters",
         "ecs:DescribeTasks",
         "ecs:ListTasks",
+        "ecs:StopTask",
         "ecs:TagResource"
       ],
       "Effect": "Allow",

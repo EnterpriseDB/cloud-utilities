@@ -21,9 +21,9 @@
 # What it does:
 #   - assume you have already login to your Azure AD(Active Directory) directory by Azure CLI
 #   - set your Azure CLI context to the given subscription
+#   - create a custom role with resource permissions documented in ./biganimal-poweruser-template.json
 #   - create a new client app or update client app in the Azure AD directory
-#   - assign this client app the role of "ower" of the given subscription
-#   - grant MS Graph API permissions
+#   - grant the custom role to the client app 
 #
 # it finally outputs the:
 #   - client app Id

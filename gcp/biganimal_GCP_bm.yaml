@@ -1,0 +1,5 @@
+title: "BigAnimal Role for Backup Manager"
+description: "Custom IAM Role used by BigAnimal Backup Manager"
+stage: "GA"
+includedPermissions:
+- compute.snapshots.delete

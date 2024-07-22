@@ -3,3 +3,4 @@ description: "Custom IAM Role used by BigAnimal Backup Manager"
 stage: "GA"
 includedPermissions:
 - compute.snapshots.delete
+- compute.globalOperations.get

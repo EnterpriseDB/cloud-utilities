@@ -203,7 +203,6 @@ download_dependencies()
     biganimal_GCP_npo.yaml
     biganimal_GCP_infra.yaml
     biganimal_GCP_telemetry.yaml
-    biganimal_GCP_kubecost.yaml
     biganimal_GCP_blm.yaml
     biganimal_GCP_cspmetrics.yaml
   )
@@ -254,7 +253,6 @@ OPERATORS_CUSTOM_ROLE=(
   npo
   infra
   telemetry
-  kubecost
   blm
   cspmetrics
 )

@@ -176,6 +176,10 @@ AVAILABLE_INSTANCETYPE=(
   m6i.16xlarge
   m6i.24xlarge
   m6i.32xlarge
+  t3.medium
+  t3.large
+  t3.xlarge
+  t3.2xlarge
 )
 
 function _toLower()

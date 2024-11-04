@@ -212,6 +212,10 @@ function _extract_instancetype_info()
         vcpu=2
         ;;
 
+        "medium")
+        vcpu=2
+        ;;
+
         "xlarge")
         vcpu=4
         ;;

@@ -203,7 +203,7 @@ function _extract_instancetype_info()
     local class=""
 
     # given "r5b.12xlarge", the regex pattern is (r5b).(12xlarge)
-    if [[ "${instance_type}" =~ ([a-z][0-9][a-z]*).([0-9]*[a-z]*large) ]]; then
+    if [[ "${instance_type}" =~ ([a-z][0-9][a-z]*).([0-9]*[a-z]*large|medium) ]]; then
       class="${BASH_REMATCH[1]}"
       size="${BASH_REMATCH[2]}"
 

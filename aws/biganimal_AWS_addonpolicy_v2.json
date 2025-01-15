@@ -37,13 +37,24 @@
         "eks:UpdateClusterVersion",
         "eks:UpdateNodegroupConfig",
         "eks:UpdateNodegroupVersion",
-        "eks:UpdateClusterConfig"
+        "eks:UpdateClusterConfig",
+        "eks:AssociateAccessPolicy",
+        "eks:DisassociateAccessPolicy",
+        "eks:ListAssociatedAccessPolicies",
+        "eks:ListAccessPolicies",
+        "eks:ListTagsForResource",
+        "eks:ListAccessEntries",
+        "eks:CreateAccessEntry",
+        "eks:DeleteAccessEntry",
+        "eks:DescribeAccessEntry",
+        "eks:UpdateAccessEntry"
       ],
       "Effect": "Allow",
       "Resource": [
         "arn:aws:eks:*:*:cluster/dp-##EXTERNAL_ID##-*",
         "arn:aws:eks:*:*:nodegroup/dp-##EXTERNAL_ID##-*/*/*",
-        "arn:aws:eks:*:*:addon/dp-##EXTERNAL_ID##-*/*/*"
+        "arn:aws:eks:*:*:addon/dp-##EXTERNAL_ID##-*/*/*",
+        "arn:aws:eks:*:*:access-entry/dp-##EXTERNAL_ID##-*/*/*/*/*"
       ]
     },
     {

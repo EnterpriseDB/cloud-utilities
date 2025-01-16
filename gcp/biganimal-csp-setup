@@ -205,6 +205,7 @@ download_dependencies()
     biganimal_GCP_telemetry.yaml
     biganimal_GCP_blm.yaml
     biganimal_GCP_cspmetrics.yaml
+    biganimal_GCP_bm.yaml
   )
   for template_file in "${TEMPLATE_FILES[@]}"; do
     download_template_file "${template_file}"
@@ -255,6 +256,7 @@ OPERATORS_CUSTOM_ROLE=(
   telemetry
   blm
   cspmetrics
+  bm
 )
 
 create_operators_iam_custom_role()
